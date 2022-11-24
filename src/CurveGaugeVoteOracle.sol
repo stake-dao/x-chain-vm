@@ -67,16 +67,13 @@ contract CurveGaugeVoteOracle {
         require(block_header.hash == _eth_blockhash[block_header.number], "hash doesn't match"); // dev: blockhash mismatch
         // convert _proof_rlp into a list of `RLPItem`s
         RLPReader.RLPItem[] memory proofs = _proof_rlp.toRlpItem().toList();
-        console2.log("here2");
         // 0th proof is the account proof for Gauge Controller contract
         Verifier.Account memory gauge_controller_account = Verifier.extractAccountFromProof(
             GAUGE_CONTROLLER_HASH, // position of the account is the hash of its address
             block_header.stateRootHash,
             proofs[0].toList()
         );
-        console2.log("fails");
         require(gauge_controller_account.exists); // dev: Gauge Controller account does not exist
-        console2.log("here");
         Verifier.SlotValue memory last_user_vote = Verifier.extractSlotValueFromProof(
             keccak256(abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(11, _user)), _gauge))))),
             gauge_controller_account.storageRoot,
