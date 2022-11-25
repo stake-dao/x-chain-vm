@@ -61,12 +61,11 @@ contract CurveGaugeVoteOracle {
         bytes memory _proof_rlp
     ) external {
         Verifier.BlockHeader memory block_header = Verifier.parseBlockHeader(_block_header_rlp);
-        console2.logBytes32(block_header.hash);
-        console2.log(block_header.number);
         require(block_header.hash != bytes32(0), "Wrong hash"); // dev: invalid blockhash
         require(block_header.hash == _eth_blockhash[block_header.number], "hash doesn't match"); // dev: blockhash mismatch
         // convert _proof_rlp into a list of `RLPItem`s
         RLPReader.RLPItem[] memory proofs = _proof_rlp.toRlpItem().toList();
+        require(proofs.length == 7);
         // 0th proof is the account proof for Gauge Controller contract
         Verifier.Account memory gauge_controller_account = Verifier.extractAccountFromProof(
             GAUGE_CONTROLLER_HASH, // position of the account is the hash of its address
@@ -79,6 +78,7 @@ contract CurveGaugeVoteOracle {
             gauge_controller_account.storageRoot,
             proofs[1].toList()
         );
+
         uint256 i;
         Verifier.SlotValue[2] memory point_weights;
         for (i = 0; i < 2; i++) {
@@ -98,7 +98,12 @@ contract CurveGaugeVoteOracle {
         Verifier.SlotValue[3] memory vote_user_slopes;
         for (i = 0; i < 3; i++) {
             vote_user_slopes[i] = Verifier.extractSlotValueFromProof(
-                keccak256(abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))) + i)),
+                keccak256(
+                    abi.encode(
+                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) +
+                            i
+                    )
+                ),
                 gauge_controller_account.storageRoot,
                 proofs[4 + i].toList()
             );
@@ -133,6 +138,7 @@ contract CurveGaugeVoteOracle {
         }
     }
 
+    /// ONLY FOR TESTING REMOVE BEFORE DEPLOYMENT
     function setBlockHash(uint256 _eth_block_number, bytes32 __eth_blockhash) external {
         _eth_blockhash[_eth_block_number] = __eth_blockhash;
     }
