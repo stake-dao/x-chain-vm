@@ -48,6 +48,7 @@ contract CurveGaugeVoteOracle {
     constructor() {
         _eth_blockhash[0] = GENESIS_BLOCKHASH;
         emit SetBlockhash(0, GENESIS_BLOCKHASH);
+        owner = msg.sender;
 
         // ANYCALL = _anycall;
         ANYCALL = 0x0000000000000000000000000000000000000000;
@@ -119,7 +120,7 @@ contract CurveGaugeVoteOracle {
         userUpdated[block_header.number][_user][_gauge] = true;
     }
 
-    function set_eth_blockhash(uint256 _eth_block_number, bytes32 __eth_blockhash) external {
+    function setEthBlockHash(uint256 _eth_block_number, bytes32 __eth_blockhash) external {
         // either a cross-chain call from `self` or `owner` is valid to set the blockhash
         if (msg.sender == ANYCALL) {
             (address sender, uint256 from_chain_id) = IAnyCallProxy(msg.sender).context();
@@ -136,10 +137,5 @@ contract CurveGaugeVoteOracle {
         if (_eth_block_number > last_eth_block_number) {
             last_eth_block_number = _eth_block_number;
         }
-    }
-
-    /// ONLY FOR TESTING REMOVE BEFORE DEPLOYMENT
-    function setBlockHash(uint256 _eth_block_number, bytes32 __eth_blockhash) external {
-        _eth_blockhash[_eth_block_number] = __eth_blockhash;
     }
 }
