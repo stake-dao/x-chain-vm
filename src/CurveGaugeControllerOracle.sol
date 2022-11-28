@@ -4,9 +4,8 @@ pragma solidity >=0.8.12;
 import { RLPReader } from "./RLPReader.sol";
 import { StateProofVerifier as Verifier } from "./StateProofVerifier.sol";
 import { IAnyCallProxy } from "./interfaces/IAnyCallProxy.sol";
-import { console2 } from "forge-std/console2.sol";
 
-contract CurveGaugeVoteOracle {
+contract CurveGaugeControllerOracle {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
 

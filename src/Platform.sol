@@ -50,8 +50,7 @@ import { ReentrancyGuard } from "solmate/utils/ReentrancyGuard.sol";
 import { FixedPointMathLib } from "solmate/utils/FixedPointMathLib.sol";
 import { ERC20, SafeTransferLib } from "solmate/utils/SafeTransferLib.sol";
 
-import { Factory } from "src/interfaces/Factory.sol";
-import { GaugeController } from "src/interfaces/GaugeController.sol";
+import { ICurveGaugeControllerOracle } from "src/interfaces/ICurveGaugeControllerOracle.sol";
 
 /// version 1.0.0
 /// @title  Platform
@@ -126,11 +125,11 @@ contract Platform is ReentrancyGuard {
     /// @notice Minimum duration a Bribe.
     uint8 public constant MINIMUM_PERIOD = 2;
 
-    /// @notice Factory contract.
-    Factory public immutable factory;
+    /// @notice Curve Gauge Controller Oracle.
+    ICurveGaugeControllerOracle public immutable curveGaugeControllerOracle;
 
-    /// @notice Gauge Controller.
-    GaugeController public immutable gaugeController;
+    /// @notice snapshot block number
+    uint256 public snapshotBlock;
 
     ////////////////////////////////////////////////////////////////
     /// --- STORAGE VARS
@@ -241,16 +240,16 @@ contract Platform is ReentrancyGuard {
     error ALREADY_INCREASED();
     error NOT_ALLOWED_OPERATION();
     error INVALID_NUMBER_OF_PERIODS();
+    error USER_NOT_UPDATED();
 
     ////////////////////////////////////////////////////////////////
     /// --- CONSTRUCTOR
     ///////////////////////////////////////////////////////////////
 
     /// @notice Create Bribe platform.
-    /// @param _gaugeController Address of the gauge controller.
-    constructor(address _gaugeController, address _factory) {
-        gaugeController = GaugeController(_gaugeController);
-        factory = Factory(_factory);
+    /// @param _curveGaugeControllerOracle address of the curve gauge controller oracle.
+    constructor(address _curveGaugeControllerOracle) {
+        curveGaugeControllerOracle = ICurveGaugeControllerOracle(_curveGaugeControllerOracle);
     }
 
     ////////////////////////////////////////////////////////////////
@@ -276,7 +275,7 @@ contract Platform is ReentrancyGuard {
         bool upgradeable
     ) external nonReentrant notKilled returns (uint256 newBribeID) {
         if (rewardToken == address(0)) revert ZERO_ADDRESS();
-        if (gaugeController.gauge_types(gauge) < 0) return newBribeID;
+        // if (gaugeController.gauge_types(gauge) < 0) return newBribeID;
         if (numberOfPeriods < MINIMUM_PERIOD) revert INVALID_NUMBER_OF_PERIODS();
         if (totalRewardAmount == 0) revert WRONG_INPUT();
 
@@ -333,42 +332,50 @@ contract Platform is ReentrancyGuard {
     /// @notice Claim rewards for a given bribe.
     /// @param bribeId ID of the bribe.
     /// @return Amount of rewards claimed.
-    function claim(uint256 bribeId) external returns (uint256) {
-        return _claim(msg.sender, bribeId);
+    function claim(
+        uint256 bribeId,
+        bytes memory _block_header_rlp,
+        bytes[] memory _proof_rlp
+    ) external returns (uint256) {
+        return _claim(msg.sender, bribeId, _block_header_rlp, _proof_rlp);
     }
 
     /// @notice Update Bribe for a given id.
     /// @param bribeId ID of the bribe.
-    function updateBribePeriod(uint256 bribeId) external nonReentrant {
-        _updateBribePeriod(bribeId);
+    function updateBribePeriod(
+        uint256 bribeId,
+        bytes memory _block_header_rlp,
+        bytes[] memory _proof_rlp
+    ) external nonReentrant {
+        _updateBribePeriod(bribeId, _block_header_rlp, _proof_rlp);
     }
 
-    /// @notice Update multiple bribes for given ids.
-    /// @param ids Array of Bribe IDs.
-    function updateBribePeriods(uint256[] calldata ids) external nonReentrant {
-        uint256 length = ids.length;
-        for (uint256 i = 0; i < length; ) {
-            _updateBribePeriod(ids[i]);
-            unchecked {
-                ++i;
-            }
-        }
-    }
+    // /// @notice Update multiple bribes for given ids.
+    // /// @param ids Array of Bribe IDs.
+    // function updateBribePeriods(uint256[] calldata ids) external nonReentrant {
+    //     uint256 length = ids.length;
+    //     for (uint256 i = 0; i < length; ) {
+    //         _updateBribePeriod(ids[i]);
+    //         unchecked {
+    //             ++i;
+    //         }
+    //     }
+    // }
 
-    /// @notice Claim all rewards for multiple bribes.
-    /// @param ids Array of bribe IDs to claim.
-    function claimAll(uint256[] calldata ids) external {
-        uint256 length = ids.length;
+    // /// @notice Claim all rewards for multiple bribes.
+    // /// @param ids Array of bribe IDs to claim.
+    // function claimAll(uint256[] calldata ids) external {
+    //     uint256 length = ids.length;
 
-        for (uint256 i = 0; i < length; ) {
-            uint256 id = ids[i];
-            _claim(msg.sender, id);
+    //     for (uint256 i = 0; i < length; ) {
+    //         uint256 id = ids[i];
+    //         _claim(msg.sender, id);
 
-            unchecked {
-                ++i;
-            }
-        }
-    }
+    //         unchecked {
+    //             ++i;
+    //         }
+    //     }
+    // }
 
     ////////////////////////////////////////////////////////////////
     /// --- INTERNAL LOGIC
@@ -378,10 +385,15 @@ contract Platform is ReentrancyGuard {
     /// @param user Address of the user.
     /// @param bribeId ID of the bribe.
     /// @return amount of rewards claimed.
-    function _claim(address user, uint256 bribeId) internal nonReentrant notKilled returns (uint256 amount) {
+    function _claim(
+        address user,
+        uint256 bribeId,
+        bytes memory _block_header_rlp,
+        bytes[] memory _proof_rlp
+    ) internal nonReentrant notKilled returns (uint256 amount) {
         if (isBlacklisted[bribeId][user]) return 0;
         // Update if needed the current period.
-        uint256 currentPeriod = _updateBribePeriod(bribeId);
+        uint256 currentPeriod = _updateBribePeriod(bribeId, _block_header_rlp, _proof_rlp);
 
         Bribe storage bribe = bribes[bribeId];
 
@@ -389,17 +401,20 @@ contract Platform is ReentrancyGuard {
         address gauge = bribe.gauge;
         // End timestamp of the bribe.
         uint256 endTimestamp = bribe.endTimestamp;
+        if (!curveGaugeControllerOracle.userUpdated(snapshotBlock, user, gauge)) revert USER_NOT_UPDATED();
         // Get the last_vote timestamp.
-        uint256 lastVote = gaugeController.last_user_vote(user, gauge);
-        // Get the end lock date to compute dt.
-        uint256 end = gaugeController.vote_user_slopes(user, gauge).end;
-        // Get the voting power user slope.
-        uint256 userSlope = gaugeController.vote_user_slopes(user, gauge).slope;
+        uint256 lastVote = curveGaugeControllerOracle.lastUserVote(snapshotBlock, user, gauge);
+
+        ICurveGaugeControllerOracle.VotedSlope memory votedSlope = curveGaugeControllerOracle.voteUserSlopes(
+            snapshotBlock,
+            user,
+            gauge
+        );
 
         if (
-            userSlope == 0 ||
+            votedSlope.slope == 0 ||
             lastUserClaim[user][bribeId] >= currentPeriod ||
-            currentPeriod >= end ||
+            currentPeriod >= votedSlope.end ||
             currentPeriod <= lastVote ||
             currentPeriod >= endTimestamp ||
             currentPeriod != getCurrentPeriod()
@@ -410,7 +425,7 @@ contract Platform is ReentrancyGuard {
 
         // Voting Power = userSlope * dt
         // with dt = lock_end - period.
-        uint256 _bias = _getAddrBias(userSlope, end, currentPeriod);
+        uint256 _bias = _getAddrBias(votedSlope.slope, votedSlope.end, currentPeriod);
         // Compute the reward amount based on
         // Reward / Total Votes.
         amount = _bias.mulWadDown(rewardPerToken[bribeId]);
@@ -423,16 +438,16 @@ contract Platform is ReentrancyGuard {
         // Update the amount claimed.
         amountClaimed[bribeId] += amount;
 
-        uint256 feeAmount;
-        uint256 platformFee = factory.platformFee(address(gaugeController));
+        //uint256 feeAmount;
+        // uint256 platformFee = factory.platformFee(address(gaugeController));
 
-        if (platformFee != 0) {
-            feeAmount = amount.mulWadDown(platformFee);
-            amount -= feeAmount;
+        // if (platformFee != 0) {
+        //     feeAmount = amount.mulWadDown(platformFee);
+        //     amount -= feeAmount;
 
-            // Transfer fees.
-            ERC20(bribe.rewardToken).safeTransfer(factory.feeCollector(), feeAmount);
-        }
+        //     // Transfer fees.
+        //     ERC20(bribe.rewardToken).safeTransfer(factory.feeCollector(), feeAmount);
+        // }
         // Transfer to user.
         ERC20(bribe.rewardToken).safeTransfer(user, amount);
 
@@ -442,7 +457,11 @@ contract Platform is ReentrancyGuard {
     /// @notice Update the current period for a given bribe.
     /// @param bribeId Bribe ID.
     /// @return current/updated period.
-    function _updateBribePeriod(uint256 bribeId) internal returns (uint256) {
+    function _updateBribePeriod(
+        uint256 bribeId,
+        bytes memory _block_header_rlp,
+        bytes[] memory _proof_rlp
+    ) internal returns (uint256) {
         Period storage _activePeriod = activePeriod[bribeId];
 
         uint256 currentPeriod = getCurrentPeriod();
@@ -450,15 +469,16 @@ contract Platform is ReentrancyGuard {
         if (_activePeriod.id == 0 && currentPeriod == _activePeriod.timestamp) {
             // Initialize reward per token.
             // Only for the first period, and if not already initialized.
-            _updateRewardPerToken(bribeId);
+            _updateRewardPerToken(bribeId, _block_header_rlp, _proof_rlp);
         }
 
         // Increase Period
         if (block.timestamp >= _activePeriod.timestamp + _WEEK) {
             // Checkpoint gauge to have up to date gauge weight.
-            gaugeController.checkpoint_gauge(bribes[bribeId].gauge);
+            // #TODO: add checkpoint for gauge.
+            //gaugeController.checkpoint_gauge(bribes[bribeId].gauge);
             // Roll to next period.
-            _rollOverToNextPeriod(bribeId, currentPeriod);
+            _rollOverToNextPeriod(bribeId, currentPeriod, _block_header_rlp, _proof_rlp);
 
             return currentPeriod;
         }
@@ -469,7 +489,12 @@ contract Platform is ReentrancyGuard {
     /// @notice Roll over to next period.
     /// @param bribeId Bribe ID.
     /// @param currentPeriod Next period timestamp.
-    function _rollOverToNextPeriod(uint256 bribeId, uint256 currentPeriod) internal {
+    function _rollOverToNextPeriod(
+        uint256 bribeId,
+        uint256 currentPeriod,
+        bytes memory _block_header_rlp,
+        bytes[] memory _proof_rlp
+    ) internal {
         uint8 index = getActivePeriodPerBribe(bribeId);
 
         Upgrade storage upgradedBribe = upgradeBribeQueue[bribeId];
@@ -505,7 +530,13 @@ contract Platform is ReentrancyGuard {
         }
 
         // Get adjusted slope without blacklisted addresses.
-        uint256 gaugeBias = _getAdjustedBias(bribe.gauge, bribe.blacklist, currentPeriod);
+        uint256 gaugeBias = _getAdjustedBias(
+            bribe.gauge,
+            bribe.blacklist,
+            currentPeriod,
+            _block_header_rlp,
+            _proof_rlp
+        );
 
         rewardPerToken[bribeId] = rewardPerPeriod.mulDivDown(_BASE_UNIT, gaugeBias);
         activePeriod[bribeId] = Period(index, currentPeriod, rewardPerPeriod);
@@ -515,90 +546,23 @@ contract Platform is ReentrancyGuard {
 
     /// @notice Update the amount of reward per token for a given bribe.
     /// @dev This function is only called once per Bribe.
-    function _updateRewardPerToken(uint256 bribeId) internal {
+    function _updateRewardPerToken(
+        uint256 bribeId,
+        bytes memory _block_header_rlp,
+        bytes[] memory _proof_rlp
+    ) internal {
         if (rewardPerToken[bribeId] == 0) {
             uint256 currentPeriod = getCurrentPeriod();
-            uint256 gaugeBias = _getAdjustedBias(bribes[bribeId].gauge, bribes[bribeId].blacklist, currentPeriod);
+            uint256 gaugeBias = _getAdjustedBias(
+                bribes[bribeId].gauge,
+                bribes[bribeId].blacklist,
+                currentPeriod,
+                _block_header_rlp,
+                _proof_rlp
+            );
             if (gaugeBias != 0) {
                 rewardPerToken[bribeId] = activePeriod[bribeId].rewardPerPeriod.mulDivDown(_BASE_UNIT, gaugeBias);
             }
-        }
-    }
-
-    ////////////////////////////////////////////////////////////////
-    /// ---  VIEWS
-    ///////////////////////////////////////////////////////////////
-
-    /// @notice Get an estimate of the reward amount for a given user.
-    /// @param user Address of the user.
-    /// @param bribeId ID of the bribe.
-    /// @return amount of rewards.
-    /// Mainly used for UI.
-    function claimable(address user, uint256 bribeId) external view returns (uint256 amount) {
-        if (isBlacklisted[bribeId][user]) return 0;
-
-        Bribe memory bribe = bribes[bribeId];
-
-        // Update if needed the current period.
-        uint256 currentPeriod = getCurrentPeriod();
-        // End timestamp of the bribe.
-        uint256 endTimestamp = bribe.endTimestamp;
-        // Get the last_vote timestamp.
-        uint256 lastVote = gaugeController.last_user_vote(user, bribe.gauge);
-        // Get the end lock date to compute dt.
-        uint256 end = gaugeController.vote_user_slopes(user, bribe.gauge).end;
-        // Get the voting power user slope.
-        uint256 userSlope = gaugeController.vote_user_slopes(user, bribe.gauge).slope;
-
-        if (
-            userSlope == 0 ||
-            lastUserClaim[user][bribeId] >= currentPeriod ||
-            currentPeriod >= end ||
-            currentPeriod <= lastVote ||
-            currentPeriod >= endTimestamp ||
-            currentPeriod < getActivePeriod(bribeId).timestamp
-        ) return 0;
-
-        uint256 _bias = _getAddrBias(userSlope, end, currentPeriod);
-
-        uint256 _rewardPerToken = rewardPerToken[bribeId];
-        // If period updated.
-        if (_rewardPerToken == 0 || (_rewardPerToken > 0 && getActivePeriod(bribeId).timestamp != currentPeriod)) {
-            uint256 _rewardPerPeriod;
-            // If there is an upgrade in progress but period hasn't been rolled over yet.
-            Upgrade memory upgradedBribe = upgradeBribeQueue[bribeId];
-
-            if (upgradedBribe.numberOfPeriods != 0) {
-                // Update max reward per vote.
-                bribe.maxRewardPerVote = upgradedBribe.maxRewardPerVote;
-                bribe.totalRewardAmount = upgradedBribe.totalRewardAmount;
-                // Update end timestamp.
-                endTimestamp = upgradedBribe.endTimestamp;
-            }
-
-            uint256 periodsLeft = endTimestamp > currentPeriod ? (endTimestamp - currentPeriod) / _WEEK : 0;
-            _rewardPerPeriod = bribe.totalRewardAmount - amountClaimed[bribeId];
-
-            if (endTimestamp > currentPeriod + _WEEK && periodsLeft > 1) {
-                _rewardPerPeriod = _rewardPerPeriod.mulDivDown(1, periodsLeft);
-            }
-
-            // Get Adjusted Slope without blacklisted addresses weight.
-            uint256 gaugeBias = _getAdjustedBias(bribe.gauge, bribe.blacklist, currentPeriod);
-            _rewardPerToken = _rewardPerPeriod.mulDivDown(_BASE_UNIT, gaugeBias);
-        }
-
-        // Estimation of the amount of rewards.
-        amount = _bias.mulWadDown(_rewardPerToken);
-        // Compute the reward amount based on
-        // the max price to pay.
-        uint256 _amountWithMaxPrice = _bias.mulWadDown(bribe.maxRewardPerVote);
-        // Distribute the _min between the amount based on votes, and price.
-        amount = _min(amount, _amountWithMaxPrice);
-        // Substract fees.
-        uint256 platformFee = factory.platformFee(address(gaugeController));
-        if (platformFee != 0) {
-            amount = amount.mulWadDown(_BASE_UNIT - platformFee);
         }
     }
 
@@ -614,21 +578,33 @@ contract Platform is ReentrancyGuard {
     function _getAdjustedBias(
         address gauge,
         address[] memory _addressesBlacklisted,
-        uint256 period
-    ) internal view returns (uint256 gaugeBias) {
+        uint256 period,
+        bytes memory _block_header_rlp,
+        bytes[] memory _proof_rlp
+    ) internal returns (uint256 gaugeBias) {
+        require(_proof_rlp.length == _addressesBlacklisted.length + 1, "Invalid proof  length");
         // Cache the user slope.
-        GaugeController.VotedSlope memory userSlope;
+        ICurveGaugeControllerOracle.VotedSlope memory userSlope;
         // Bias
         uint256 _bias;
         // Cache the length of the array.
         uint256 length = _addressesBlacklisted.length;
         // Get the gauge slope.
-        gaugeBias = gaugeController.points_weight(gauge, period).bias;
+        gaugeBias = curveGaugeControllerOracle.pointWeights(gauge, getCurrentPeriod()).bias;
 
         unchecked {
             for (uint256 i = 0; i < length; ) {
+                curveGaugeControllerOracle.submit_state(
+                    _addressesBlacklisted[i],
+                    gauge,
+                    getCurrentPeriod(),
+                    _block_header_rlp,
+                    _proof_rlp[i + 1] // first element is the particular user that claims the bribes
+                );
+                if (!curveGaugeControllerOracle.userUpdated(snapshotBlock, _addressesBlacklisted[i], gauge))
+                    revert USER_NOT_UPDATED();
                 // Get the user slope.
-                userSlope = gaugeController.vote_user_slopes(_addressesBlacklisted[i], gauge);
+                userSlope = curveGaugeControllerOracle.voteUserSlopes(snapshotBlock, _addressesBlacklisted[i], gauge);
                 // Remove the user bias from the gauge bias.
                 _bias = _getAddrBias(userSlope.slope, userSlope.end, period);
 
@@ -706,7 +682,8 @@ contract Platform is ReentrancyGuard {
     }
 
     function kill() external {
-        if (msg.sender != address(factory)) revert NOT_ALLOWED_OPERATION();
+        //TODO: add autharization beside factory
+        // if (msg.sender != address(factory)) revert NOT_ALLOWED_OPERATION();
         isKilled = true;
     }
 

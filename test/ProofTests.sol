@@ -5,7 +5,7 @@ import { console2 } from "forge-std/console2.sol";
 import { PRBTest } from "@prb/test/PRBTest.sol";
 import { StdCheats } from "forge-std/StdCheats.sol";
 import { EthereumStateSender } from "src/EthereumStateSender.sol";
-import { CurveGaugeVoteOracle } from "src/CurveGaugeVoteOracle.sol";
+import { CurveGaugeControllerOracle } from "src/CurveGaugeControllerOracle.sol";
 
 /// @dev See the "Writing Tests" section in the Foundry Book if this is your first time with Forge.
 /// https://book.getfoundry.sh/forge/writing-tests
@@ -16,12 +16,12 @@ contract ProofTests is PRBTest, StdCheats {
     uint256 blockNumber = 16041523;
     bytes32 blockHash = bytes32(hex"b327dd4a5e2962e70376078a721bec307ea254b1e790f4851e672d22b5fd6722");
     EthereumStateSender sender;
-    CurveGaugeVoteOracle oracle;
+    CurveGaugeControllerOracle oracle;
 
     function setUp() public {
         // solhint-disable-previous-line no-empty-blocks
         sender = new EthereumStateSender();
-        oracle = new CurveGaugeVoteOracle();
+        oracle = new CurveGaugeControllerOracle();
     }
 
     /// @dev Run Forge with `-vvvv` to see console logs.
