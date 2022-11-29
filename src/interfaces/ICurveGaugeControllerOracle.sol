@@ -36,7 +36,6 @@ interface ICurveGaugeControllerOracle {
     function submit_state(
         address _user,
         address _gauge,
-        uint256 _time,
         bytes calldata _block_header_rlp,
         bytes calldata _proof_rlp
     ) external;

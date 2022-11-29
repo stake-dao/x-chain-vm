@@ -37,7 +37,7 @@ contract CurveGaugeControllerOracle {
     /// Owner of the contract with special privileges
     address public owner;
 
-    mapping(address => mapping(uint256 => Point)) public pointWeights; // gauge => time => Point
+    mapping(address => mapping(uint256 => Point)) public pointWeights; // gauge => block => Point
     mapping(uint256 => mapping(address => mapping(address => VotedSlope))) public voteUserSlopes; // block -> user -> gauge -> VotedSlope
     mapping(uint256 => mapping(address => mapping(address => uint256))) public lastUserVote; // block -> user -> gauge -> lastUserVote
     mapping(uint256 => mapping(address => mapping(address => bool))) public userUpdated; // block -> user -> gauge -> bool
@@ -56,13 +56,13 @@ contract CurveGaugeControllerOracle {
     function submit_state(
         address _user,
         address _gauge,
-        uint256 _time,
         bytes memory _block_header_rlp,
         bytes memory _proof_rlp
     ) external {
         Verifier.BlockHeader memory block_header = Verifier.parseBlockHeader(_block_header_rlp);
         require(block_header.hash != bytes32(0), "Wrong hash"); // dev: invalid blockhash
         require(block_header.hash == _eth_blockhash[block_header.number], "hash doesn't match"); // dev: blockhash mismatch
+        uint256 time = (block_header.timestamp / 1 weeks) * 1 weeks;
         // convert _proof_rlp into a list of `RLPItem`s
         RLPReader.RLPItem[] memory proofs = _proof_rlp.toRlpItem().toList();
         require(proofs.length == 7);
@@ -85,9 +85,8 @@ contract CurveGaugeControllerOracle {
             point_weights[i] = Verifier.extractSlotValueFromProof(
                 keccak256(
                     abi.encode(
-                        uint256(
-                            keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), _time))))
-                        ) + i
+                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time))))) +
+                            i
                     )
                 ),
                 gauge_controller_account.storageRoot,
@@ -109,7 +108,7 @@ contract CurveGaugeControllerOracle {
             );
         }
 
-        pointWeights[_gauge][_time] = Point(point_weights[0].value, point_weights[1].value);
+        pointWeights[_gauge][block_header.number] = Point(point_weights[0].value, point_weights[1].value);
         voteUserSlopes[block_header.number][_user][_gauge] = VotedSlope(
             vote_user_slopes[0].value,
             vote_user_slopes[1].value,

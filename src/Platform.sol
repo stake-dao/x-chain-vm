@@ -112,6 +112,11 @@ contract Platform is ReentrancyGuard {
         uint256 endTimestamp;
     }
 
+    struct ProofData {
+        bytes headerRlp;
+        bytes[] proofRlp;
+    }
+
     ////////////////////////////////////////////////////////////////
     /// --- CONSTANTS & IMMUTABLES
     ///////////////////////////////////////////////////////////////
@@ -130,6 +135,12 @@ contract Platform is ReentrancyGuard {
 
     /// @notice snapshot block number
     uint256 public snapshotBlock;
+
+    /// @notice Fee recipient address.
+    address public feeRecipient;
+
+    /// @notice Fee amount.
+    uint256 public platformFee;
 
     ////////////////////////////////////////////////////////////////
     /// --- STORAGE VARS
@@ -275,7 +286,6 @@ contract Platform is ReentrancyGuard {
         bool upgradeable
     ) external nonReentrant notKilled returns (uint256 newBribeID) {
         if (rewardToken == address(0)) revert ZERO_ADDRESS();
-        // if (gaugeController.gauge_types(gauge) < 0) return newBribeID;
         if (numberOfPeriods < MINIMUM_PERIOD) revert INVALID_NUMBER_OF_PERIODS();
         if (totalRewardAmount == 0) revert WRONG_INPUT();
 
@@ -350,32 +360,36 @@ contract Platform is ReentrancyGuard {
         _updateBribePeriod(bribeId, _block_header_rlp, _proof_rlp);
     }
 
-    // /// @notice Update multiple bribes for given ids.
-    // /// @param ids Array of Bribe IDs.
-    // function updateBribePeriods(uint256[] calldata ids) external nonReentrant {
-    //     uint256 length = ids.length;
-    //     for (uint256 i = 0; i < length; ) {
-    //         _updateBribePeriod(ids[i]);
-    //         unchecked {
-    //             ++i;
-    //         }
-    //     }
-    // }
+    /// @notice Update multiple bribes for given ids.
+    /// @param ids Array of Bribe IDs.
+    function updateBribePeriods(uint256[] calldata ids, ProofData[] calldata proofs) external nonReentrant {
+        uint256 length = ids.length;
+        for (uint256 i = 0; i < length; ) {
+            _updateBribePeriod(ids[i], proofs[i].headerRlp, proofs[i].proofRlp);
+            unchecked {
+                ++i;
+            }
+        }
+    }
 
-    // /// @notice Claim all rewards for multiple bribes.
-    // /// @param ids Array of bribe IDs to claim.
-    // function claimAll(uint256[] calldata ids) external {
-    //     uint256 length = ids.length;
+    /// @notice Claim all rewards for multiple bribes.
+    /// @param ids Array of bribe IDs to claim.
+    function claimAll(
+        address recipient,
+        uint256[] calldata ids,
+        ProofData[] calldata proofs
+    ) external {
+        uint256 length = ids.length;
 
-    //     for (uint256 i = 0; i < length; ) {
-    //         uint256 id = ids[i];
-    //         _claim(msg.sender, id);
+        for (uint256 i = 0; i < length; ) {
+            uint256 id = ids[i];
+            _claim(recipient, id, proofs[i].headerRlp, proofs[i].proofRlp);
 
-    //         unchecked {
-    //             ++i;
-    //         }
-    //     }
-    // }
+            unchecked {
+                ++i;
+            }
+        }
+    }
 
     ////////////////////////////////////////////////////////////////
     /// --- INTERNAL LOGIC
@@ -438,17 +452,16 @@ contract Platform is ReentrancyGuard {
         // Update the amount claimed.
         amountClaimed[bribeId] += amount;
 
-        //uint256 feeAmount;
-        // uint256 platformFee = factory.platformFee(address(gaugeController));
+        uint256 feeAmount;
 
-        // if (platformFee != 0) {
-        //     feeAmount = amount.mulWadDown(platformFee);
-        //     amount -= feeAmount;
+        if (platformFee != 0) {
+            feeAmount = amount.mulWadDown(platformFee);
+            amount -= feeAmount;
 
-        //     // Transfer fees.
-        //     ERC20(bribe.rewardToken).safeTransfer(factory.feeCollector(), feeAmount);
-        // }
-        // Transfer to user.
+            // Transfer fees.
+            ERC20(bribe.rewardToken).safeTransfer(feeRecipient, feeAmount);
+        }
+        //Transfer to user
         ERC20(bribe.rewardToken).safeTransfer(user, amount);
 
         emit Claimed(user, bribe.rewardToken, bribeId, amount, currentPeriod);
@@ -476,7 +489,7 @@ contract Platform is ReentrancyGuard {
         if (block.timestamp >= _activePeriod.timestamp + _WEEK) {
             // Checkpoint gauge to have up to date gauge weight.
             // #TODO: add checkpoint for gauge.
-            //gaugeController.checkpoint_gauge(bribes[bribeId].gauge);
+            // gaugeController.checkpoint_gauge(bribes[bribeId].gauge);
             // Roll to next period.
             _rollOverToNextPeriod(bribeId, currentPeriod, _block_header_rlp, _proof_rlp);
 
@@ -590,19 +603,21 @@ contract Platform is ReentrancyGuard {
         // Cache the length of the array.
         uint256 length = _addressesBlacklisted.length;
         // Get the gauge slope.
-        gaugeBias = curveGaugeControllerOracle.pointWeights(gauge, getCurrentPeriod()).bias;
+        gaugeBias = curveGaugeControllerOracle.pointWeights(gauge, snapshotBlock).bias;
 
         unchecked {
             for (uint256 i = 0; i < length; ) {
-                curveGaugeControllerOracle.submit_state(
-                    _addressesBlacklisted[i],
-                    gauge,
-                    getCurrentPeriod(),
-                    _block_header_rlp,
-                    _proof_rlp[i + 1] // first element is the particular user that claims the bribes
-                );
+                if (!curveGaugeControllerOracle.userUpdated(snapshotBlock, _addressesBlacklisted[i], gauge)) {
+                    curveGaugeControllerOracle.submit_state(
+                        _addressesBlacklisted[i],
+                        gauge,
+                        _block_header_rlp,
+                        _proof_rlp[i + 1] // first element is the particular user that claims the bribes
+                    );
+                }
                 if (!curveGaugeControllerOracle.userUpdated(snapshotBlock, _addressesBlacklisted[i], gauge))
                     revert USER_NOT_UPDATED();
+
                 // Get the user slope.
                 userSlope = curveGaugeControllerOracle.voteUserSlopes(snapshotBlock, _addressesBlacklisted[i], gauge);
                 // Remove the user bias from the gauge bias.
