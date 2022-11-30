@@ -143,6 +143,9 @@ contract Platform is ReentrancyGuard {
     /// @notice Fee amount.
     uint256 public platformFee;
 
+    /// @notice Governance address
+    address public governance;
+
     ////////////////////////////////////////////////////////////////
     /// --- STORAGE VARS
     ///////////////////////////////////////////////////////////////
@@ -253,6 +256,7 @@ contract Platform is ReentrancyGuard {
     error NOT_ALLOWED_OPERATION();
     error INVALID_NUMBER_OF_PERIODS();
     error USER_NOT_UPDATED();
+    error NOT_GOVERNANCE();
 
     ////////////////////////////////////////////////////////////////
     /// --- CONSTRUCTOR
@@ -671,9 +675,23 @@ contract Platform is ReentrancyGuard {
     }
 
     function kill() external {
-        //TODO: add autharization beside factory
-        // if (msg.sender != address(factory)) revert NOT_ALLOWED_OPERATION();
+        if (msg.sender != governance) revert NOT_GOVERNANCE();
         isKilled = true;
+    }
+
+    function setGovernance(address _governance) external {
+        if (msg.sender != governance) revert NOT_GOVERNANCE();
+        governance = _governance;
+    }
+
+    function setPlatformFee(uint256 _platformFee) external {
+        if (msg.sender != governance) revert NOT_GOVERNANCE();
+        platformFee = _platformFee;
+    }
+
+    function setFeeRecipient(address _feeRecipient) external {
+        if (msg.sender != governance) revert NOT_GOVERNANCE();
+        feeRecipient = _feeRecipient;
     }
 
     ////////////////////////////////////////////////////////////////
