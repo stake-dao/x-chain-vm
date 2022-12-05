@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.17;
 
-import {Test, console} from "forge-std/Test.sol";
+import "test/utils/Utils.sol";
+
 import {GaugeController} from "src/interfaces/GaugeController.sol";
 import {EthereumStateSender} from "src/merkle-utils/EthereumStateSender.sol";
 import {CurveGaugeControllerOracle} from "src/CurveGaugeControllerOracle.sol";
 
-contract ProofExtractor is Test {
+contract ProofExtractor is Utils {
     EthereumStateSender sender;
     CurveGaugeControllerOracle oracle;
 
@@ -31,7 +32,7 @@ contract ProofExtractor is Test {
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
-            getRLPEncodedProofs(_gaugeController, _positions, _blockNumber);
+            getRLPEncodedProofs("mainnet", _gaugeController, _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
         oracle.setEthBlockHash(_blockNumber, _block_hash);
@@ -46,20 +47,5 @@ contract ProofExtractor is Test {
         assertEq(voted_slope.slope, slope);
         assertEq(voted_slope.power, power);
         assertEq(voted_slope.end, end);
-    }
-
-    function getRLPEncodedProofs(address _account, uint256[6] memory _positions, uint256 _blockNumber)
-        internal
-        returns (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp)
-    {
-        string[] memory inputs = new string[](10);
-        inputs[0] = "python3";
-        inputs[1] = "test/python/get_proof.py";
-        inputs[2] = vm.toString(_account);
-        for (uint256 i = 3; i < 9; i++) {
-            inputs[i] = vm.toString(_positions[i - 3]);
-        }
-        inputs[9] = vm.toString(_blockNumber);
-        return abi.decode(vm.ffi(inputs), (bytes32, bytes, bytes));
     }
 }

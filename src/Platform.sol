@@ -113,6 +113,7 @@ contract Platform is ReentrancyGuard {
     }
 
     struct ProofData {
+        address user;
         bytes headerRlp;
         bytes userProofRlp;
         bytes[] blackListedProofsRlp;
@@ -338,42 +339,17 @@ contract Platform is ReentrancyGuard {
     /// @param bribeId ID of the bribe.
     /// @return Amount of rewards claimed.
     function claim(uint256 bribeId, ProofData memory proofData) external returns (uint256) {
-        return _claim(msg.sender, bribeId, proofData);
-    }
-
-    /// @notice Claim rewards for a given bribe.
-    /// @param bribeId ID of the bribe.
-    /// @return Amount of rewards claimed.
-    function claim(address recipient, uint256 bribeId, ProofData memory proofData) external returns (uint256) {
-        return _claim(recipient, bribeId, proofData);
-    }
-
-    /// @notice Update Bribe for a given id.
-    /// @param bribeId ID of the bribe.
-    function updateBribePeriod(uint256 bribeId, ProofData memory proofData) external nonReentrant {
-        _updateBribePeriod(bribeId, proofData);
-    }
-
-    /// @notice Update multiple bribes for given ids.
-    /// @param ids Array of Bribe IDs.
-    function updateBribePeriods(uint256[] calldata ids, ProofData[] calldata proofs) external nonReentrant {
-        uint256 length = ids.length;
-        for (uint256 i = 0; i < length;) {
-            _updateBribePeriod(ids[i], proofs[i]);
-            unchecked {
-                ++i;
-            }
-        }
+        return _claim(bribeId, proofData);
     }
 
     /// @notice Claim all rewards for multiple bribes.
     /// @param ids Array of bribe IDs to claim.
-    function claimAll(address recipient, uint256[] calldata ids, ProofData[] calldata proofs) external {
+    function claimAll(uint256[] calldata ids, ProofData[] calldata proofs) external {
         uint256 length = ids.length;
 
         for (uint256 i = 0; i < length;) {
             uint256 id = ids[i];
-            _claim(recipient, id, proofs[i]);
+            _claim(id, proofs[i]);
 
             unchecked {
                 ++i;
@@ -386,33 +362,33 @@ contract Platform is ReentrancyGuard {
     ///////////////////////////////////////////////////////////////
 
     /// @notice Claim rewards for a given bribe.
-    /// @param user Address of the user.
     /// @param bribeId ID of the bribe.
     /// @return amount of rewards claimed.
-    function _claim(address user, uint256 bribeId, ProofData memory proofData)
+    function _claim(uint256 bribeId, ProofData memory proofData)
         internal
         nonReentrant
         notKilled
         returns (uint256 amount)
     {
-        if (isBlacklisted[bribeId][user]) return 0;
+        if (isBlacklisted[bribeId][proofData.user]) return 0;
         // Update if needed the current period.
         uint256 currentPeriod = _updateBribePeriod(bribeId, proofData);
 
         Bribe storage bribe = bribes[bribeId];
-        (, ICurveGaugeControllerOracle.VotedSlope memory votedSlope, uint256 lastVote,) =
-            curveGaugeControllerOracle.extractProofState(user, bribe.gauge, proofData.headerRlp, proofData.userProofRlp);
+        (, ICurveGaugeControllerOracle.VotedSlope memory votedSlope, uint256 lastVote,) = curveGaugeControllerOracle
+            .extractProofState(proofData.user, bribe.gauge, proofData.headerRlp, proofData.userProofRlp);
 
         // End timestamp of the bribe.
         uint256 endTimestamp = bribe.endTimestamp;
 
         if (
-            votedSlope.slope == 0 || lastUserClaim[user][bribeId] >= currentPeriod || currentPeriod >= votedSlope.end
-                || currentPeriod <= lastVote || currentPeriod >= endTimestamp || currentPeriod != getCurrentPeriod()
+            votedSlope.slope == 0 || lastUserClaim[proofData.user][bribeId] >= currentPeriod
+                || currentPeriod >= votedSlope.end || currentPeriod <= lastVote || currentPeriod >= endTimestamp
+                || currentPeriod != getCurrentPeriod()
         ) return 0;
 
         // Update User last claim period.
-        lastUserClaim[user][bribeId] = currentPeriod;
+        lastUserClaim[proofData.user][bribeId] = currentPeriod;
 
         // Voting Power = userSlope * dt
         // with dt = lock_end - period.
@@ -439,9 +415,9 @@ contract Platform is ReentrancyGuard {
             ERC20(bribe.rewardToken).safeTransfer(feeRecipient, feeAmount);
         }
         //Transfer to user
-        ERC20(bribe.rewardToken).safeTransfer(user, amount);
+        ERC20(bribe.rewardToken).safeTransfer(proofData.user, amount);
 
-        emit Claimed(user, bribe.rewardToken, bribeId, amount, currentPeriod);
+        emit Claimed(proofData.user, bribe.rewardToken, bribeId, amount, currentPeriod);
     }
 
     /// @notice Update the current period for a given bribe.
@@ -553,7 +529,15 @@ contract Platform is ReentrancyGuard {
         // Get the gauge slope.
         gaugeBias = curveGaugeControllerOracle.pointWeights(gauge, snapshotBlock).bias;
 
-        unchecked {
+        if (gaugeBias == 0) {
+            curveGaugeControllerOracle.submit_state(proofData.user, gauge, proofData.headerRlp, proofData.userProofRlp);
+            if (!curveGaugeControllerOracle.userUpdated(snapshotBlock, proofData.user, gauge)) {
+                revert USER_NOT_UPDATED();
+            }
+            gaugeBias = curveGaugeControllerOracle.pointWeights(gauge, snapshotBlock).bias;
+        }
+
+        if (length > 0) {
             for (uint256 i = 0; i < length;) {
                 if (!curveGaugeControllerOracle.userUpdated(snapshotBlock, _addressesBlacklisted[i], gauge)) {
                     curveGaugeControllerOracle.submit_state(
@@ -562,6 +546,10 @@ contract Platform is ReentrancyGuard {
                         proofData.headerRlp,
                         proofData.blackListedProofsRlp[i] // first element is the particular user that claims the bribes
                     );
+
+                    if (!curveGaugeControllerOracle.userUpdated(snapshotBlock, _addressesBlacklisted[i], gauge)) {
+                        revert USER_NOT_UPDATED();
+                    }
                 }
                 // Get the user slope.
                 userSlope = curveGaugeControllerOracle.voteUserSlopes(snapshotBlock, _addressesBlacklisted[i], gauge);
@@ -569,8 +557,10 @@ contract Platform is ReentrancyGuard {
                 _bias = _getAddrBias(userSlope.slope, userSlope.end, period);
 
                 gaugeBias -= _bias;
-                // Increment i.
-                ++i;
+                unchecked {
+                    // Increment i.
+                    ++i;
+                }
             }
         }
     }

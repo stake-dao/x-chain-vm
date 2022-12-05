@@ -4,10 +4,11 @@ from web3 import Web3
 from eth_abi import encode
 from hexbytes import HexBytes
 
+args = sys.argv[1:]
 # Initialize a Web3.py instance
-web3 = Web3(
-    Web3.HTTPProvider("https://mainnet.infura.io/v3/b5dc2199e2254c10b4bd4a39b78a7e89")
-)
+RPC_URL = "https://mainnet.infura.io/v3/b5dc2199e2254c10b4bd4a39b78a7e89" if args[0] == "mainnet" else "http://localhost:8545"
+
+web3 = Web3(Web3.HTTPProvider(RPC_URL))
 
 BLOCK_HEADER = (
     "parentHash",
@@ -69,11 +70,9 @@ def encode_rlp_proofs(proofs):
 
 
 def main():
-    args = sys.argv[1:]
-
-    account = args[0]
-    keys = [int(x) for x in args[1:7]]
-    block_number = args[7]
+    account = args[1]
+    keys = [int(x) for x in args[2:8]]
+    block_number = args[8]
 
     return generate_proofs(account, keys, block_number)
 
