@@ -4,9 +4,9 @@
  * Copied from https://github.com/lorenzb/proveth/blob/c74b20e/onchain/ProvethVerifier.sol
  * with minor performance and code style-related modifications.
  */
-pragma solidity >=0.8.12;
+pragma solidity 0.8.17;
 
-import { RLPReader } from "./RLPReader.sol";
+import {RLPReader} from "src/merkle-utils/RLPReader.sol";
 
 library MerklePatriciaProofVerifier {
     using RLPReader for RLPReader.RLPItem;
@@ -24,11 +24,11 @@ library MerklePatriciaProofVerifier {
     ///        need to be traversed during verification.
     /// @return value whose inclusion is proved or an empty byte array for
     ///         a proof of exclusion
-    function extractProofValue(
-        bytes32 rootHash,
-        bytes memory path,
-        RLPReader.RLPItem[] memory stack
-    ) internal pure returns (bytes memory value) {
+    function extractProofValue(bytes32 rootHash, bytes memory path, RLPReader.RLPItem[] memory stack)
+        internal
+        pure
+        returns (bytes memory value)
+    {
         bytes memory mptKey = _decodeNibbles(path, 0);
         uint256 mptKeyOffset = 0;
 
@@ -242,11 +242,7 @@ library MerklePatriciaProofVerifier {
         assert(nibblesLength == nibbles.length);
     }
 
-    function _sharedPrefixLength(
-        uint256 xsOffset,
-        bytes memory xs,
-        bytes memory ys
-    ) private pure returns (uint256) {
+    function _sharedPrefixLength(uint256 xsOffset, bytes memory xs, bytes memory ys) private pure returns (uint256) {
         uint256 i;
         for (i = 0; i + xsOffset < xs.length && i < ys.length; i++) {
             if (xs[i + xsOffset] != ys[i]) {

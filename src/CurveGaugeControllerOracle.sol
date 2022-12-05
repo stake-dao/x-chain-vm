@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.12;
+pragma solidity 0.8.17;
 
-import { RLPReader } from "./RLPReader.sol";
-import { StateProofVerifier as Verifier } from "./StateProofVerifier.sol";
-import { IAnyCallProxy } from "./interfaces/IAnyCallProxy.sol";
+import {RLPReader} from "src/merkle-utils/RLPReader.sol";
+import {IAnyCallProxy} from "src/interfaces/IAnyCallProxy.sol";
+import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
 
 contract CurveGaugeControllerOracle {
     using RLPReader for bytes;
@@ -21,10 +21,15 @@ contract CurveGaugeControllerOracle {
     }
 
     address constant GAUGE_CONTROLLER = 0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB;
-
     bytes32 constant GAUGE_CONTROLLER_HASH = keccak256(abi.encodePacked(GAUGE_CONTROLLER));
-
     bytes32 constant GENESIS_BLOCKHASH = 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3;
+
+    error INVALID_HASH();
+    error INVALID_BLOCK_HEADER();
+    error INVALID_HASH_MISMATCH();
+    error INVALID_PROOF_LENGTH();
+    error GAUGE_CONTROLLER_NOT_FOUND();
+
     /// Address of the AnyCallProxy for the chain this contract is deployed on
     address public immutable ANYCALL;
 
@@ -42,80 +47,120 @@ contract CurveGaugeControllerOracle {
     mapping(uint256 => mapping(address => mapping(address => uint256))) public lastUserVote; // block -> user -> gauge -> lastUserVote
     mapping(uint256 => mapping(address => mapping(address => bool))) public userUpdated; // block -> user -> gauge -> bool
     /// Log a blockhash update
+
     event SetBlockhash(uint256 _eth_block_number, bytes32 _eth_blockhash);
 
-    constructor() {
+    constructor(address _anyCall) {
         _eth_blockhash[0] = GENESIS_BLOCKHASH;
         emit SetBlockhash(0, GENESIS_BLOCKHASH);
         owner = msg.sender;
 
-        // ANYCALL = _anycall;
-        ANYCALL = 0x0000000000000000000000000000000000000000;
+        ANYCALL = _anyCall;
     }
 
-    function submit_state(
-        address _user,
-        address _gauge,
-        bytes memory _block_header_rlp,
-        bytes memory _proof_rlp
-    ) external {
+    function submit_state(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
+        external
+    {
+        // Verify the state proof
+        (Point memory point, VotedSlope memory votedSlope, uint256 lastVote, uint256 blockNumber) =
+            _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
+
+        pointWeights[_gauge][blockNumber] = point;
+        voteUserSlopes[blockNumber][_user][_gauge] = votedSlope;
+        lastUserVote[blockNumber][_user][_gauge] = lastVote;
+        userUpdated[blockNumber][_user][_gauge] = true;
+    }
+
+    function extractProofState(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
+        external
+        view
+        returns (Point memory point, VotedSlope memory votedSlope, uint256 lastVote, uint256 blockNumber)
+    {
+        return _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
+    }
+
+    function _extractProofState(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
+        internal
+        view
+        returns (Point memory weight, VotedSlope memory userSlope, uint256 lastVote, uint256 blockNumber)
+    {
         Verifier.BlockHeader memory block_header = Verifier.parseBlockHeader(_block_header_rlp);
-        require(block_header.hash != bytes32(0), "Wrong hash"); // dev: invalid blockhash
-        require(block_header.hash == _eth_blockhash[block_header.number], "hash doesn't match"); // dev: blockhash mismatch
-        uint256 time = (block_header.timestamp / 1 weeks) * 1 weeks;
-        // convert _proof_rlp into a list of `RLPItem`s
+        blockNumber = block_header.number;
+
+        if (block_header.hash == bytes32(0)) revert INVALID_HASH();
+        if (block_header.hash != _eth_blockhash[blockNumber]) revert INVALID_HASH_MISMATCH(); // dev: blockhash mismatch
+
+        // Convert _proof_rlp into a list of `RLPItem`s.
         RLPReader.RLPItem[] memory proofs = _proof_rlp.toRlpItem().toList();
-        require(proofs.length == 7);
+        if (proofs.length < 7) revert INVALID_PROOF_LENGTH();
+
         // 0th proof is the account proof for Gauge Controller contract
         Verifier.Account memory gauge_controller_account = Verifier.extractAccountFromProof(
             GAUGE_CONTROLLER_HASH, // position of the account is the hash of its address
             block_header.stateRootHash,
             proofs[0].toList()
         );
-        require(gauge_controller_account.exists); // dev: Gauge Controller account does not exist
-        Verifier.SlotValue memory last_user_vote = Verifier.extractSlotValueFromProof(
+        if (!gauge_controller_account.exists) revert GAUGE_CONTROLLER_NOT_FOUND();
+
+        /// User's account proof.
+        /// Last User Vote.
+        lastVote = Verifier.extractSlotValueFromProof(
             keccak256(abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(11, _user)), _gauge))))),
             gauge_controller_account.storageRoot,
             proofs[1].toList()
-        );
+        ).value;
 
-        uint256 i;
-        Verifier.SlotValue[2] memory point_weights;
-        for (i = 0; i < 2; i++) {
-            point_weights[i] = Verifier.extractSlotValueFromProof(
-                keccak256(
-                    abi.encode(
-                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time))))) +
-                            i
-                    )
-                ),
-                gauge_controller_account.storageRoot,
-                proofs[2 + i].toList()
-            );
-        }
+        userSlope.slope = Verifier.extractSlotValueFromProof(
+            keccak256(
+                abi.encode(
+                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) + 0
+                )
+            ),
+            gauge_controller_account.storageRoot,
+            proofs[4].toList()
+        ).value;
 
-        Verifier.SlotValue[3] memory vote_user_slopes;
-        for (i = 0; i < 3; i++) {
-            vote_user_slopes[i] = Verifier.extractSlotValueFromProof(
-                keccak256(
-                    abi.encode(
-                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) +
-                            i
-                    )
-                ),
-                gauge_controller_account.storageRoot,
-                proofs[4 + i].toList()
-            );
-        }
+        userSlope.power = Verifier.extractSlotValueFromProof(
+            keccak256(
+                abi.encode(
+                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) + 1
+                )
+            ),
+            gauge_controller_account.storageRoot,
+            proofs[5].toList()
+        ).value;
 
-        pointWeights[_gauge][block_header.number] = Point(point_weights[0].value, point_weights[1].value);
-        voteUserSlopes[block_header.number][_user][_gauge] = VotedSlope(
-            vote_user_slopes[0].value,
-            vote_user_slopes[1].value,
-            vote_user_slopes[2].value
-        );
-        lastUserVote[block_header.number][_user][_gauge] = last_user_vote.value;
-        userUpdated[block_header.number][_user][_gauge] = true;
+        userSlope.end = Verifier.extractSlotValueFromProof(
+            keccak256(
+                abi.encode(
+                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) + 2
+                )
+            ),
+            gauge_controller_account.storageRoot,
+            proofs[6].toList()
+        ).value;
+
+        /// Gauge Weight proof.
+        uint256 time = (block_header.timestamp / 1 weeks) * 1 weeks;
+        weight.bias = Verifier.extractSlotValueFromProof(
+            keccak256(
+                abi.encode(
+                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time))))) + 0
+                )
+            ),
+            gauge_controller_account.storageRoot,
+            proofs[2].toList()
+        ).value;
+
+        weight.slope = Verifier.extractSlotValueFromProof(
+            keccak256(
+                abi.encode(
+                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time))))) + 1
+                )
+            ),
+            gauge_controller_account.storageRoot,
+            proofs[3].toList()
+        ).value;
     }
 
     function setEthBlockHash(uint256 _eth_block_number, bytes32 __eth_blockhash) external {

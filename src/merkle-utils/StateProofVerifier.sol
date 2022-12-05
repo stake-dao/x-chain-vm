@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
+pragma solidity 0.8.17;
 
-pragma solidity >=0.8.12;
-
-import { RLPReader } from "./RLPReader.sol";
-import { MerklePatriciaProofVerifier } from "./MerklePatriciaProofVerifier.sol";
+import {RLPReader} from "src/merkle-utils/RLPReader.sol";
+import {MerklePatriciaProofVerifier} from "src/merkle-utils/MerklePatriciaProofVerifier.sol";
 
 /**
  * @title A helper library for verification of Merkle Patricia account and state proofs.
@@ -76,11 +75,8 @@ library StateProofVerifier {
         bytes32 _stateRootHash,
         RLPReader.RLPItem[] memory _proof
     ) internal pure returns (Account memory) {
-        bytes memory acctRlpBytes = MerklePatriciaProofVerifier.extractProofValue(
-            _stateRootHash,
-            abi.encodePacked(_addressHash),
-            _proof
-        );
+        bytes memory acctRlpBytes =
+            MerklePatriciaProofVerifier.extractProofValue(_stateRootHash, abi.encodePacked(_addressHash), _proof);
 
         Account memory account;
 
@@ -106,16 +102,13 @@ library StateProofVerifier {
      * @param _slotHash Keccak256 hash of the slot position.
      * @param _storageRootHash MPT root hash of the account's storage trie.
      */
-    function extractSlotValueFromProof(
-        bytes32 _slotHash,
-        bytes32 _storageRootHash,
-        RLPReader.RLPItem[] memory _proof
-    ) internal pure returns (SlotValue memory) {
-        bytes memory valueRlpBytes = MerklePatriciaProofVerifier.extractProofValue(
-            _storageRootHash,
-            abi.encodePacked(_slotHash),
-            _proof
-        );
+    function extractSlotValueFromProof(bytes32 _slotHash, bytes32 _storageRootHash, RLPReader.RLPItem[] memory _proof)
+        internal
+        pure
+        returns (SlotValue memory)
+    {
+        bytes memory valueRlpBytes =
+            MerklePatriciaProofVerifier.extractProofValue(_storageRootHash, abi.encodePacked(_slotHash), _proof);
 
         SlotValue memory value;
 

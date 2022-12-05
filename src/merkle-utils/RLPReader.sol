@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-
 /*
  * @author Hamdi Allam hamdi.allam97@gmail.com
  * Please reach out with any questions or concerns
  */
-pragma solidity >=0.8.12;
+pragma solidity 0.8.17;
 
 library RLPReader {
     uint8 constant STRING_SHORT_START = 0x80;
@@ -159,7 +158,9 @@ library RLPReader {
         return result;
     }
 
-    /** RLPItem conversions into data types **/
+    /**
+     * RLPItem conversions into data types *
+     */
 
     // @returns raw rlp encoding in bytes
     function toRlpBytes(RLPItem memory item) internal pure returns (bytes memory) {
@@ -212,9 +213,7 @@ library RLPReader {
             result := mload(memPtr)
 
             // shfit to the correct location if neccesary
-            if lt(len, 32) {
-                result := div(result, exp(256, sub(32, len)))
-            }
+            if lt(len, 32) { result := div(result, exp(256, sub(32, len))) }
         }
 
         return result;
@@ -276,9 +275,11 @@ library RLPReader {
             byte0 := byte(0, mload(memPtr))
         }
 
-        if (byte0 < STRING_SHORT_START) itemLen = 1;
-        else if (byte0 < STRING_LONG_START) itemLen = byte0 - STRING_SHORT_START + 1;
-        else if (byte0 < LIST_SHORT_START) {
+        if (byte0 < STRING_SHORT_START) {
+            itemLen = 1;
+        } else if (byte0 < STRING_LONG_START) {
+            itemLen = byte0 - STRING_SHORT_START + 1;
+        } else if (byte0 < LIST_SHORT_START) {
             assembly {
                 let byteLen := sub(byte0, 0xb7) // # of bytes the actual length is
                 memPtr := add(memPtr, 1) // skip over the first byte
@@ -309,12 +310,16 @@ library RLPReader {
             byte0 := byte(0, mload(memPtr))
         }
 
-        if (byte0 < STRING_SHORT_START) return 0;
-        else if (byte0 < STRING_LONG_START || (byte0 >= LIST_SHORT_START && byte0 < LIST_LONG_START)) return 1;
-        else if (byte0 < LIST_SHORT_START)
+        if (byte0 < STRING_SHORT_START) {
+            return 0;
+        } else if (byte0 < STRING_LONG_START || (byte0 >= LIST_SHORT_START && byte0 < LIST_LONG_START)) {
+            return 1;
+        } else if (byte0 < LIST_SHORT_START) {
             // being explicit
             return byte0 - (STRING_LONG_START - 1) + 1;
-        else return byte0 - (LIST_LONG_START - 1) + 1;
+        } else {
+            return byte0 - (LIST_LONG_START - 1) + 1;
+        }
     }
 
     /*
@@ -322,11 +327,7 @@ library RLPReader {
      * @param dest Pointer to destination
      * @param len Amount of memory to copy from the source
      */
-    function copy(
-        uint256 src,
-        uint256 dest,
-        uint256 len
-    ) private pure {
+    function copy(uint256 src, uint256 dest, uint256 len) private pure {
         if (len == 0) return;
 
         // copy as many word sizes as possible
@@ -341,7 +342,7 @@ library RLPReader {
 
         if (len > 0) {
             // left over bytes. Mask is used to remove unwanted bytes from the word
-            uint256 mask = 256**(WORD_SIZE - len) - 1;
+            uint256 mask = 256 ** (WORD_SIZE - len) - 1;
             assembly {
                 let srcpart := and(mload(src), not(mask)) // zero out src
                 let destpart := and(mload(dest), mask) // retrieve the bytes
