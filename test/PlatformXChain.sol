@@ -87,24 +87,20 @@ contract PlatformXChainTest is Utils {
         _id = platform.createBribe(
             _gauge, _user, address(_rewardToken), _numberOfPeriods, _maxRewardPerVote, _amount, _blacklist, upgradeable
         );
-
-        uint256 currentPeriod = _getCurrentPeriod();
-        Platform.Bribe memory _bribe = platform.getBribe(_id);
-
-        stdstore.target(address(platform)).sig("bribes(uint256)").with_key(_id).depth(4).checked_write(
-            _bribe.endTimestamp - 1 weeks
-        );
-        stdstore.target(address(platform)).sig("activePeriod(uint256)").with_key(_id).depth(1).checked_write(
-            currentPeriod
-        );
-
-        Platform.Period memory _period = platform.getActivePeriod(_id);
-        assertEq(_period.timestamp, _getCurrentPeriod());
+        _overrideBribePeriod(_id);
     }
 
     function _createDefaultBribe() internal returns (uint256 _id) {
         _id = platform.createBribe(_gauge, _user, address(rewardToken), 2, 2e18, _amount, new address[](0), true);
+        _overrideBribePeriod(_id);
+    }
 
+    function _getCurrentPeriod() internal view returns (uint256) {
+        return block.timestamp / 1 weeks * 1 weeks;
+    }
+
+    /// Move starting period to current period to avoid issues with calculating proof.
+    function _overrideBribePeriod(uint _id) internal {
         uint256 currentPeriod = _getCurrentPeriod();
         Platform.Bribe memory _bribe = platform.getBribe(_id);
 
@@ -117,9 +113,6 @@ contract PlatformXChainTest is Utils {
 
         Platform.Period memory _period = platform.getActivePeriod(_id);
         assertEq(_period.timestamp, _getCurrentPeriod());
-    }
 
-    function _getCurrentPeriod() internal view returns (uint256) {
-        return block.timestamp / 1 weeks * 1 weeks;
     }
 }
