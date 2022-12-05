@@ -10,6 +10,8 @@ import {EthereumStateSender} from "src/merkle-utils/EthereumStateSender.sol";
 import {CurveGaugeControllerOracle} from "src/CurveGaugeControllerOracle.sol";
 
 contract PlatformXChainTest is Utils {
+    using stdStorage for StdStorage;
+
     EthereumStateSender sender;
     CurveGaugeControllerOracle oracle;
 
@@ -36,14 +38,15 @@ contract PlatformXChainTest is Utils {
         rewardToken.approve(address(platform), _amount);
     }
 
-    function testCorrectAssertions() public {
+    function testClaimBribe() public {
         // Create Default Bribe.
         uint256 _id = _createDefaultBribe();
         _gaugeController.checkpoint_gauge(_gauge);
 
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
-            sender.generateEthProofParams(_user, _gauge, block.timestamp / 1 weeks * 1 weeks);
+            sender.generateEthProofParams(_user, _gauge,_getCurrentPeriod());
+
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -51,6 +54,9 @@ contract PlatformXChainTest is Utils {
 
         // Submit ETH Block Hash to Oracle.
         oracle.setEthBlockHash(_blockNumber, _block_hash);
+
+        // Set Snapshot Block Number.
+        platform.setSnapshotBlock(_blockNumber);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
@@ -60,10 +66,13 @@ contract PlatformXChainTest is Utils {
             blackListedProofsRlp: new bytes[](0)
         });
 
-        platform.claim(_id, _proofData);
+        uint claimed = platform.claim(_id, _proofData);
 
-        /// TODO:
-        /// Need to figure out how to test with Anvil by moving the block forward, and then eth_getProof.
+        assertGt(claimed, 0);
+        assertGt(platform.rewardPerToken(_id), 0);
+
+        claimed = platform.claim(_id, _proofData);
+        assertEq(claimed, 0);
     }
 
     function _createCustomBribe(
@@ -74,13 +83,43 @@ contract PlatformXChainTest is Utils {
         uint256,
         address[] memory _blacklist,
         bool upgradeable
-    ) internal returns (uint256) {
-        return platform.createBribe(
+    ) internal returns (uint256 _id) {
+        _id = platform.createBribe(
             _gauge, _user, address(_rewardToken), _numberOfPeriods, _maxRewardPerVote, _amount, _blacklist, upgradeable
         );
+
+        uint256 currentPeriod = _getCurrentPeriod();
+        Platform.Bribe memory _bribe = platform.getBribe(_id);
+
+        stdstore.target(address(platform)).sig("bribes(uint256)").with_key(_id).depth(4).checked_write(
+            _bribe.endTimestamp - 1 weeks
+        );
+        stdstore.target(address(platform)).sig("activePeriod(uint256)").with_key(_id).depth(1).checked_write(
+            currentPeriod
+        );
+
+        Platform.Period memory _period = platform.getActivePeriod(_id);
+        assertEq(_period.timestamp, _getCurrentPeriod());
     }
 
-    function _createDefaultBribe() internal returns (uint256) {
-        return platform.createBribe(_gauge, _user, address(rewardToken), 2, 2e18, _amount, new address[](0), true);
+    function _createDefaultBribe() internal returns (uint256 _id) {
+        _id = platform.createBribe(_gauge, _user, address(rewardToken), 2, 2e18, _amount, new address[](0), true);
+
+        uint256 currentPeriod = _getCurrentPeriod();
+        Platform.Bribe memory _bribe = platform.getBribe(_id);
+
+        stdstore.target(address(platform)).sig("bribes(uint256)").with_key(_id).depth(4).checked_write(
+            _bribe.endTimestamp - 1 weeks
+        );
+        stdstore.target(address(platform)).sig("activePeriod(uint256)").with_key(_id).depth(1).checked_write(
+            currentPeriod
+        );
+
+        Platform.Period memory _period = platform.getActivePeriod(_id);
+        assertEq(_period.timestamp, _getCurrentPeriod());
+    }
+
+    function _getCurrentPeriod() internal view returns (uint256) {
+        return block.timestamp / 1 weeks * 1 weeks;
     }
 }

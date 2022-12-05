@@ -257,6 +257,8 @@ contract Platform is ReentrancyGuard {
     /// @param _curveGaugeControllerOracle address of the curve gauge controller oracle.
     constructor(address _curveGaugeControllerOracle) {
         curveGaugeControllerOracle = ICurveGaugeControllerOracle(_curveGaugeControllerOracle);
+
+        governance = msg.sender;
     }
 
     ////////////////////////////////////////////////////////////////
@@ -631,6 +633,11 @@ contract Platform is ReentrancyGuard {
     function kill() external {
         if (msg.sender != governance) revert NOT_GOVERNANCE();
         isKilled = true;
+    }
+
+    function setSnapshotBlock(uint256 _block) external {
+        if (msg.sender != governance) revert NOT_GOVERNANCE();
+        snapshotBlock = _block;
     }
 
     function setGovernance(address _governance) external {

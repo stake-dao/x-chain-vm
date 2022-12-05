@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.17;
 
-import {Test, console} from "forge-std/Test.sol";
+import "forge-std/Test.sol";
 
 abstract contract Utils is Test {
     function getRLPEncodedProofs(
