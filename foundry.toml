@@ -6,7 +6,3 @@ libs = ["lib"]
 out = "out"
 verbosity = 3
 ffi = true
-
-[profile.ci]
-fuzz = { runs = 1_000 }
-verbosity = 4
