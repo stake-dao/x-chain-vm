@@ -31,10 +31,10 @@ contract EthereumStateSender {
             _positions[1 + i] = pointWeightsPosition + i;
         }
 
-        uint256 voteUserSlopesPosition =
+        uint256 voteUserSlopePosition =
             uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge)))));
         for (i = 0; i < 3; i++) {
-            _positions[3 + i] = voteUserSlopesPosition + i;
+            _positions[3 + i] = voteUserSlopePosition + i;
         }
         return (_user, _gauge, _time, _positions, block.number);
     }

@@ -20,8 +20,13 @@ contract CurveGaugeControllerOracle {
         uint256 end;
     }
 
+    // Curve Gauge Controller.
     address constant GAUGE_CONTROLLER = 0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB;
+
+    // Curve Gauge Controller hash.
     bytes32 constant GAUGE_CONTROLLER_HASH = keccak256(abi.encodePacked(GAUGE_CONTROLLER));
+
+    // Genesis ETH blockhash.
     bytes32 constant GENESIS_BLOCKHASH = 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3;
 
     error INVALID_HASH();
@@ -46,11 +51,11 @@ contract CurveGaugeControllerOracle {
     address public owner;
 
     mapping(address => mapping(uint256 => Point)) public pointWeights; // gauge => block => Point
-    mapping(uint256 => mapping(address => mapping(address => VotedSlope))) public voteUserSlopes; // block -> user -> gauge -> VotedSlope
+    mapping(uint256 => mapping(address => mapping(address => bool))) public isUserUpdated; // block -> user -> gauge -> bool
     mapping(uint256 => mapping(address => mapping(address => uint256))) public lastUserVote; // block -> user -> gauge -> lastUserVote
-    mapping(uint256 => mapping(address => mapping(address => bool))) public userUpdated; // block -> user -> gauge -> bool
-    /// Log a blockhash update
+    mapping(uint256 => mapping(address => mapping(address => VotedSlope))) public voteUserSlope; // block -> user -> gauge -> VotedSlope
 
+    /// Log a blockhash update
     event SetBlockhash(uint256 _eth_block_number, bytes32 _eth_blockhash);
 
     constructor(address _anyCall) {
@@ -69,9 +74,9 @@ contract CurveGaugeControllerOracle {
         = _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
 
         pointWeights[_gauge][blockNumber] = point;
-        voteUserSlopes[blockNumber][_user][_gauge] = votedSlope;
+        voteUserSlope[blockNumber][_user][_gauge] = votedSlope;
         lastUserVote[blockNumber][_user][_gauge] = lastVote;
-        userUpdated[blockNumber][_user][_gauge] = true;
+        isUserUpdated[blockNumber][_user][_gauge] = true;
 
         _state_root_hash[blockNumber] = stateRootHash;
     }
@@ -124,71 +129,78 @@ contract CurveGaugeControllerOracle {
             stateRootHash = gauge_controller_account.storageRoot;
         }
 
-        /// User's account proof.
-        /// Last User Vote.
-        lastVote = Verifier.extractSlotValueFromProof(
-            keccak256(abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(11, _user)), _gauge))))),
-            stateRootHash,
-            proofs[1].toList()
-        ).value;
+        unchecked {
+            /// User's account proof.
+            /// Last User Vote.
+            lastVote = Verifier.extractSlotValueFromProof(
+                keccak256(abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(11, _user)), _gauge))))),
+                stateRootHash,
+                proofs[1].toList()
+            ).value;
 
-        userSlope.slope = Verifier.extractSlotValueFromProof(
-            keccak256(
-                abi.encode(
-                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) + 0
-                )
-            ),
-            stateRootHash,
-            proofs[4].toList()
-        ).value;
-
-        userSlope.power = Verifier.extractSlotValueFromProof(
-            keccak256(
-                abi.encode(
-                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) + 1
-                )
-            ),
-            stateRootHash,
-            proofs[5].toList()
-        ).value;
-
-        userSlope.end = Verifier.extractSlotValueFromProof(
-            keccak256(
-                abi.encode(
-                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) + 2
-                )
-            ),
-            stateRootHash,
-            proofs[6].toList()
-        ).value;
-
-        weight = pointWeights[_gauge][blockNumber];
-        if (weight.bias == 0) {
-            /// Gauge Weight proof.
-            uint256 time = (block_header.timestamp / 1 weeks) * 1 weeks;
-
-            weight.bias = Verifier.extractSlotValueFromProof(
+            userSlope.slope = Verifier.extractSlotValueFromProof(
                 keccak256(
                     abi.encode(
-                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time)))))
+                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge)))))
                             + 0
                     )
                 ),
                 stateRootHash,
-                proofs[2].toList()
+                proofs[4].toList()
             ).value;
 
-            weight.slope = Verifier.extractSlotValueFromProof(
+            userSlope.power = Verifier.extractSlotValueFromProof(
                 keccak256(
                     abi.encode(
-                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time)))))
+                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge)))))
                             + 1
                     )
                 ),
                 stateRootHash,
-                proofs[3].toList()
+                proofs[5].toList()
             ).value;
-        } 
+
+            userSlope.end = Verifier.extractSlotValueFromProof(
+                keccak256(
+                    abi.encode(
+                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge)))))
+                            + 2
+                    )
+                ),
+                stateRootHash,
+                proofs[6].toList()
+            ).value;
+
+            weight = pointWeights[_gauge][blockNumber];
+            if (weight.bias == 0) {
+                /// Gauge Weight proof.
+                uint256 time = (block_header.timestamp / 1 weeks) * 1 weeks;
+
+                weight.bias = Verifier.extractSlotValueFromProof(
+                    keccak256(
+                        abi.encode(
+                            uint256(
+                                keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time))))
+                            ) + 0
+                        )
+                    ),
+                    stateRootHash,
+                    proofs[2].toList()
+                ).value;
+
+                weight.slope = Verifier.extractSlotValueFromProof(
+                    keccak256(
+                        abi.encode(
+                            uint256(
+                                keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time))))
+                            ) + 1
+                        )
+                    ),
+                    stateRootHash,
+                    proofs[3].toList()
+                ).value;
+            }
+        }
     }
 
     function setAnycall(address _anycall) external {

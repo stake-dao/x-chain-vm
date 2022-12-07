@@ -15,11 +15,11 @@ interface ICurveGaugeControllerOracle {
 
     function pointWeights(address _gauge, uint256 _time) external view returns (Point memory);
 
-    function voteUserSlopes(uint256 _block, address _user, address _gauge) external view returns (VotedSlope memory);
+    function voteUserSlope(uint256 _block, address _user, address _gauge) external view returns (VotedSlope memory);
 
     function lastUserVote(uint256 _block, address _user, address _gauge) external view returns (uint256);
 
-    function userUpdated(uint256 _block, address _user, address _gauge) external view returns (bool);
+    function isUserUpdated(uint256 _block, address _user, address _gauge) external view returns (bool);
 
     function submit_state(address _user, address _gauge, bytes calldata _block_header_rlp, bytes calldata _proof_rlp)
         external;

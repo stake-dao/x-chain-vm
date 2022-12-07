@@ -41,7 +41,7 @@ contract ProofExtractor is Utils {
         oracle.submit_state(_user, _gauge, _block_header_rlp, _proof_rlp);
 
         /// Retrive the values from the oracle.
-        (uint256 slope, uint256 power, uint256 end) = oracle.voteUserSlopes(_blockNumber, _user, _gauge);
+        (uint256 slope, uint256 power, uint256 end) = oracle.voteUserSlope(_blockNumber, _user, _gauge);
 
         assertEq(last_user_vote, oracle.lastUserVote(_blockNumber, _user, _gauge));
         assertEq(voted_slope.slope, slope);

@@ -533,32 +533,25 @@ contract Platform is ReentrancyGuard {
 
         if (gaugeBias == 0) {
             curveGaugeControllerOracle.submit_state(proofData.user, gauge, proofData.headerRlp, proofData.userProofRlp);
-            if (!curveGaugeControllerOracle.userUpdated(snapshotBlock, proofData.user, gauge)) {
+
+            if (!curveGaugeControllerOracle.isUserUpdated(snapshotBlock, proofData.user, gauge)) {
                 revert USER_NOT_UPDATED();
             }
+
             gaugeBias = curveGaugeControllerOracle.pointWeights(gauge, snapshotBlock).bias;
         }
 
         if (length > 0) {
             for (uint256 i = 0; i < length;) {
-                if (!curveGaugeControllerOracle.userUpdated(snapshotBlock, _addressesBlacklisted[i], gauge)) {
-                    curveGaugeControllerOracle.submit_state(
-                        _addressesBlacklisted[i],
-                        gauge,
-                        proofData.headerRlp,
-                        proofData.blackListedProofsRlp[i] // first element is the particular user that claims the bribes
-                    );
-
-                    if (!curveGaugeControllerOracle.userUpdated(snapshotBlock, _addressesBlacklisted[i], gauge)) {
-                        revert USER_NOT_UPDATED();
-                    }
-                }
                 // Get the user slope.
-                userSlope = curveGaugeControllerOracle.voteUserSlopes(snapshotBlock, _addressesBlacklisted[i], gauge);
+                userSlope = _submitState(
+                    _addressesBlacklisted[i], gauge, proofData.headerRlp, proofData.blackListedProofsRlp[i]
+                );
                 // Remove the user bias from the gauge bias.
                 _bias = _getAddrBias(userSlope.slope, userSlope.end, period);
 
                 gaugeBias -= _bias;
+
                 unchecked {
                     // Increment i.
                     ++i;
@@ -658,6 +651,20 @@ contract Platform is ReentrancyGuard {
     ////////////////////////////////////////////////////////////////
     /// --- UTILS FUNCTIONS
     ///////////////////////////////////////////////////////////////
+
+    function _submitState(address _user, address _gauge, bytes memory _headerRlp, bytes memory _proofRlp)
+        internal
+        returns (ICurveGaugeControllerOracle.VotedSlope memory slope)
+    {
+        if (!curveGaugeControllerOracle.isUserUpdated(snapshotBlock, _user, _gauge)) {
+            curveGaugeControllerOracle.submit_state(_user, _gauge, _headerRlp, _proofRlp);
+            if (!curveGaugeControllerOracle.isUserUpdated(snapshotBlock, _user, _gauge)) {
+                revert USER_NOT_UPDATED();
+            }
+        }
+
+        slope = curveGaugeControllerOracle.voteUserSlope(snapshotBlock, _user, _gauge);
+    }
 
     /// @notice Returns the number of periods left for a given bribe.
     /// @param bribeId ID of the bribe.
