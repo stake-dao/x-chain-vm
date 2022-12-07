@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import {RLPReader} from "src/merkle-utils/RLPReader.sol";
-import {IAnyCallProxy} from "src/interfaces/IAnyCallProxy.sol";
-import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
+import { RLPReader } from "src/merkle-utils/RLPReader.sol";
+import { IAnyCallProxy } from "src/interfaces/IAnyCallProxy.sol";
+import { StateProofVerifier as Verifier } from "src/merkle-utils/StateProofVerifier.sol";
 
 contract CurveGaugeControllerOracle {
     using RLPReader for bytes;
@@ -58,12 +58,19 @@ contract CurveGaugeControllerOracle {
         ANYCALL = _anyCall;
     }
 
-    function submit_state(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
-        external
-    {
+    function submit_state(
+        address _user,
+        address _gauge,
+        bytes memory _block_header_rlp,
+        bytes memory _proof_rlp
+    ) external {
         // Verify the state proof
-        (Point memory point, VotedSlope memory votedSlope, uint256 lastVote, uint256 blockNumber) =
-            _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
+        (Point memory point, VotedSlope memory votedSlope, uint256 lastVote, uint256 blockNumber) = _extractProofState(
+            _user,
+            _gauge,
+            _block_header_rlp,
+            _proof_rlp
+        );
 
         pointWeights[_gauge][blockNumber] = point;
         voteUserSlopes[blockNumber][_user][_gauge] = votedSlope;
@@ -71,18 +78,38 @@ contract CurveGaugeControllerOracle {
         userUpdated[blockNumber][_user][_gauge] = true;
     }
 
-    function extractProofState(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
+    function extractProofState(
+        address _user,
+        address _gauge,
+        bytes memory _block_header_rlp,
+        bytes memory _proof_rlp
+    )
         external
         view
-        returns (Point memory point, VotedSlope memory votedSlope, uint256 lastVote, uint256 blockNumber)
+        returns (
+            Point memory point,
+            VotedSlope memory votedSlope,
+            uint256 lastVote,
+            uint256 blockNumber
+        )
     {
         return _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
     }
 
-    function _extractProofState(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
+    function _extractProofState(
+        address _user,
+        address _gauge,
+        bytes memory _block_header_rlp,
+        bytes memory _proof_rlp
+    )
         internal
         view
-        returns (Point memory weight, VotedSlope memory userSlope, uint256 lastVote, uint256 blockNumber)
+        returns (
+            Point memory weight,
+            VotedSlope memory userSlope,
+            uint256 lastVote,
+            uint256 blockNumber
+        )
     {
         Verifier.BlockHeader memory block_header = Verifier.parseBlockHeader(_block_header_rlp);
         blockNumber = block_header.number;
@@ -104,63 +131,86 @@ contract CurveGaugeControllerOracle {
 
         /// User's account proof.
         /// Last User Vote.
-        lastVote = Verifier.extractSlotValueFromProof(
-            keccak256(abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(11, _user)), _gauge))))),
-            gauge_controller_account.storageRoot,
-            proofs[1].toList()
-        ).value;
+        lastVote = Verifier
+            .extractSlotValueFromProof(
+                keccak256(abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(11, _user)), _gauge))))),
+                gauge_controller_account.storageRoot,
+                proofs[1].toList()
+            )
+            .value;
 
-        userSlope.slope = Verifier.extractSlotValueFromProof(
-            keccak256(
-                abi.encode(
-                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) + 0
-                )
-            ),
-            gauge_controller_account.storageRoot,
-            proofs[4].toList()
-        ).value;
+        userSlope.slope = Verifier
+            .extractSlotValueFromProof(
+                keccak256(
+                    abi.encode(
+                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) +
+                            0
+                    )
+                ),
+                gauge_controller_account.storageRoot,
+                proofs[4].toList()
+            )
+            .value;
 
-        userSlope.power = Verifier.extractSlotValueFromProof(
-            keccak256(
-                abi.encode(
-                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) + 1
-                )
-            ),
-            gauge_controller_account.storageRoot,
-            proofs[5].toList()
-        ).value;
+        userSlope.power = Verifier
+            .extractSlotValueFromProof(
+                keccak256(
+                    abi.encode(
+                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) +
+                            1
+                    )
+                ),
+                gauge_controller_account.storageRoot,
+                proofs[5].toList()
+            )
+            .value;
 
-        userSlope.end = Verifier.extractSlotValueFromProof(
-            keccak256(
-                abi.encode(
-                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) + 2
-                )
-            ),
-            gauge_controller_account.storageRoot,
-            proofs[6].toList()
-        ).value;
+        userSlope.end = Verifier
+            .extractSlotValueFromProof(
+                keccak256(
+                    abi.encode(
+                        uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(9, _user)), _gauge))))) +
+                            2
+                    )
+                ),
+                gauge_controller_account.storageRoot,
+                proofs[6].toList()
+            )
+            .value;
 
         /// Gauge Weight proof.
         uint256 time = (block_header.timestamp / 1 weeks) * 1 weeks;
-        weight.bias = Verifier.extractSlotValueFromProof(
-            keccak256(
-                abi.encode(
-                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time))))) + 0
+        if (pointWeights[_gauge][blockNumber].bias == 0) {
+            weight.bias = Verifier
+                .extractSlotValueFromProof(
+                    keccak256(
+                        abi.encode(
+                            uint256(
+                                keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time))))
+                            ) + 0
+                        )
+                    ),
+                    gauge_controller_account.storageRoot,
+                    proofs[2].toList()
                 )
-            ),
-            gauge_controller_account.storageRoot,
-            proofs[2].toList()
-        ).value;
+                .value;
 
-        weight.slope = Verifier.extractSlotValueFromProof(
-            keccak256(
-                abi.encode(
-                    uint256(keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time))))) + 1
+            weight.slope = Verifier
+                .extractSlotValueFromProof(
+                    keccak256(
+                        abi.encode(
+                            uint256(
+                                keccak256(abi.encode(keccak256(abi.encode(keccak256(abi.encode(12, _gauge)), time))))
+                            ) + 1
+                        )
+                    ),
+                    gauge_controller_account.storageRoot,
+                    proofs[3].toList()
                 )
-            ),
-            gauge_controller_account.storageRoot,
-            proofs[3].toList()
-        ).value;
+                .value;
+        } else {
+            weight = pointWeights[_gauge][blockNumber];
+        }
     }
 
     function setEthBlockHash(uint256 _eth_block_number, bytes32 __eth_blockhash) external {
