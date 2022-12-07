@@ -75,7 +75,7 @@ contract PlatformXChainTest is Utils {
     }
 
     function _createCustomBribe(
-        address _gauge,
+        address gauge,
         address _rewardToken,
         uint8 _numberOfPeriods,
         uint256 _maxRewardPerVote,
@@ -84,7 +84,7 @@ contract PlatformXChainTest is Utils {
         bool upgradeable
     ) internal returns (uint256 _id) {
         _id = platform.createBribe(
-            _gauge, _user, address(_rewardToken), _numberOfPeriods, _maxRewardPerVote, _amount, _blacklist, upgradeable
+            gauge, _user, address(_rewardToken), _numberOfPeriods, _maxRewardPerVote, _amount, _blacklist, upgradeable
         );
         _overrideBribePeriod(_id);
     }

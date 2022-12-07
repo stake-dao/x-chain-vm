@@ -65,8 +65,8 @@ contract CurveGaugeControllerOracle {
         external
     {
         // Verify the state proof
-        (Point memory point, VotedSlope memory votedSlope, uint256 lastVote, uint256 blockNumber, bytes32 stateRootHash) =
-            _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
+        (Point memory point, VotedSlope memory votedSlope, uint256 lastVote, uint256 blockNumber, bytes32 stateRootHash)
+        = _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
 
         pointWeights[_gauge][blockNumber] = point;
         voteUserSlopes[blockNumber][_user][_gauge] = votedSlope;
@@ -79,7 +79,13 @@ contract CurveGaugeControllerOracle {
     function extractProofState(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
         external
         view
-        returns (Point memory point, VotedSlope memory votedSlope, uint256 lastVote, uint256 blockNumber, bytes32 stateRootHash)
+        returns (
+            Point memory point,
+            VotedSlope memory votedSlope,
+            uint256 lastVote,
+            uint256 blockNumber,
+            bytes32 stateRootHash
+        )
     {
         return _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
     }
@@ -87,7 +93,13 @@ contract CurveGaugeControllerOracle {
     function _extractProofState(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
         internal
         view
-        returns (Point memory weight, VotedSlope memory userSlope, uint256 lastVote, uint256 blockNumber, bytes32 stateRootHash)
+        returns (
+            Point memory weight,
+            VotedSlope memory userSlope,
+            uint256 lastVote,
+            uint256 blockNumber,
+            bytes32 stateRootHash
+        )
     {
         Verifier.BlockHeader memory block_header = Verifier.parseBlockHeader(_block_header_rlp);
         blockNumber = block_header.number;
@@ -108,6 +120,7 @@ contract CurveGaugeControllerOracle {
                 proofs[0].toList()
             );
             if (!gauge_controller_account.exists) revert GAUGE_CONTROLLER_NOT_FOUND();
+
             stateRootHash = gauge_controller_account.storageRoot;
         }
 
@@ -149,9 +162,11 @@ contract CurveGaugeControllerOracle {
             proofs[6].toList()
         ).value;
 
-        /// Gauge Weight proof.
-        uint256 time = (block_header.timestamp / 1 weeks) * 1 weeks;
-        if (pointWeights[_gauge][blockNumber].bias == 0) {
+        weight = pointWeights[_gauge][blockNumber];
+        if (weight.bias == 0) {
+            /// Gauge Weight proof.
+            uint256 time = (block_header.timestamp / 1 weeks) * 1 weeks;
+
             weight.bias = Verifier.extractSlotValueFromProof(
                 keccak256(
                     abi.encode(
@@ -173,9 +188,7 @@ contract CurveGaugeControllerOracle {
                 stateRootHash,
                 proofs[3].toList()
             ).value;
-        } else {
-            weight = pointWeights[_gauge][blockNumber];
-        }
+        } 
     }
 
     function setEthBlockHash(uint256 _eth_block_number, bytes32 __eth_blockhash) external {
