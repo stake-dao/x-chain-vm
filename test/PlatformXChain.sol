@@ -45,8 +45,7 @@ contract PlatformXChainTest is Utils {
 
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
-            sender.generateEthProofParams(_user, _gauge,_getCurrentPeriod());
-
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -66,7 +65,7 @@ contract PlatformXChainTest is Utils {
             blackListedProofsRlp: new bytes[](0)
         });
 
-        uint claimed = platform.claim(_id, _proofData);
+        uint256 claimed = platform.claim(_id, _proofData);
 
         assertGt(claimed, 0);
         assertGt(platform.rewardPerToken(_id), 0);
@@ -100,7 +99,7 @@ contract PlatformXChainTest is Utils {
     }
 
     /// Move starting period to current period to avoid issues with calculating proof.
-    function _overrideBribePeriod(uint _id) internal {
+    function _overrideBribePeriod(uint256 _id) internal {
         uint256 currentPeriod = _getCurrentPeriod();
         Platform.Bribe memory _bribe = platform.getBribe(_id);
 
@@ -113,6 +112,5 @@ contract PlatformXChainTest is Utils {
 
         Platform.Period memory _period = platform.getActivePeriod(_id);
         assertEq(_period.timestamp, _getCurrentPeriod());
-
     }
 }

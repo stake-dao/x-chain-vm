@@ -2,7 +2,7 @@
 
 [profile.default]
 libs = ["lib"]
-verbosity = 2
+verbosity = 3
 ffi = true
 
 remappings = [
