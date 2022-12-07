@@ -31,7 +31,7 @@ contract CurveGaugeControllerOracle {
     error GAUGE_CONTROLLER_NOT_FOUND();
 
     /// Address of the AnyCallProxy for the chain this contract is deployed on
-    address public immutable ANYCALL;
+    address public ANYCALL;
 
     /// Mapping of Ethereum block number to blockhash
     mapping(uint256 => bytes32) private _eth_blockhash;
@@ -189,6 +189,11 @@ contract CurveGaugeControllerOracle {
                 proofs[3].toList()
             ).value;
         } 
+    }
+
+    function setAnycall(address _anycall) external {
+        require(msg.sender == owner); // dev: only owner
+        ANYCALL = _anycall;
     }
 
     function setEthBlockHash(uint256 _eth_block_number, bytes32 __eth_blockhash) external {
