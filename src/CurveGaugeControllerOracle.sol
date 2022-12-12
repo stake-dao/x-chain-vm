@@ -29,10 +29,13 @@ contract CurveGaugeControllerOracle {
     // Genesis ETH blockhash.
     bytes32 constant GENESIS_BLOCKHASH = 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3;
 
+    error NOT_OWNER();
     error INVALID_HASH();
+    error WRONG_CONTEXT();
     error INVALID_BLOCK_HEADER();
-    error INVALID_HASH_MISMATCH();
     error INVALID_PROOF_LENGTH();
+    error INVALID_HASH_MISMATCH();
+    error PERIOD_ALREADY_UPDATED();
     error GAUGE_CONTROLLER_NOT_FOUND();
 
     /// Address of the AnyCallProxy for the chain this contract is deployed on
@@ -47,6 +50,8 @@ contract CurveGaugeControllerOracle {
     /// Last Ethereum block number which had its blockhash stored
     uint256 public last_eth_block_number;
 
+    uint256 public activePeriod;
+
     /// Owner of the contract with special privileges
     address public owner;
 
@@ -59,11 +64,12 @@ contract CurveGaugeControllerOracle {
     event SetBlockhash(uint256 _eth_block_number, bytes32 _eth_blockhash);
 
     constructor(address _anyCall) {
-        _eth_blockhash[0] = GENESIS_BLOCKHASH;
-        emit SetBlockhash(0, GENESIS_BLOCKHASH);
         owner = msg.sender;
+        _eth_blockhash[0] = GENESIS_BLOCKHASH;
 
         ANYCALL = _anyCall;
+
+        emit SetBlockhash(0, GENESIS_BLOCKHASH);
     }
 
     function submit_state(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
@@ -204,21 +210,25 @@ contract CurveGaugeControllerOracle {
     }
 
     function setAnycall(address _anycall) external {
-        require(msg.sender == owner); // dev: only owner
+        if (msg.sender != owner) revert NOT_OWNER();
         ANYCALL = _anycall;
     }
 
     function setEthBlockHash(uint256 _eth_block_number, bytes32 __eth_blockhash) external {
+        uint256 _period = block.timestamp / 1 weeks * 1 weeks;
+        if (activePeriod >= _period) revert PERIOD_ALREADY_UPDATED();
+
         // either a cross-chain call from `self` or `owner` is valid to set the blockhash
         if (msg.sender == ANYCALL) {
             (address sender, uint256 from_chain_id) = IAnyCallProxy(msg.sender).context();
-            require(sender == address(this) && from_chain_id == 1); // dev: only root self
+            if (sender != address(this) || from_chain_id != 1) revert WRONG_CONTEXT();
         } else {
-            require(msg.sender == owner); // dev: only owner
+            if (msg.sender != owner) revert NOT_OWNER();
         }
 
         // set the blockhash in storage
         _eth_blockhash[_eth_block_number] = __eth_blockhash;
+        activePeriod = _period;
         emit SetBlockhash(_eth_block_number, __eth_blockhash);
 
         // update the last block number stored

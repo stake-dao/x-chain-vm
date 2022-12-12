@@ -23,6 +23,8 @@ contract PlatformXChainTest is Utils {
 
     address internal constant _user = 0x52f541764E6e90eeBc5c21Ff570De0e2D63766B6;
     address internal constant _gauge = 0xd8b712d29381748dB89c36BCa0138d7c75866ddF;
+    address internal constant _blacklisted = 0x51fD44BA77B3066949B874f24C374819eF78809a;
+
     // Gauge Controller
     GaugeController internal constant _gaugeController = GaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB);
 
@@ -38,9 +40,45 @@ contract PlatformXChainTest is Utils {
         rewardToken.approve(address(platform), _amount);
     }
 
+    function testSetBlockHash() public {
+        // Create Default Bribe.
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        // Build the proof.
+        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        // Get RLP Encoded proofs.
+        (bytes32 _block_hash,,) = getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+
+        // Submit ETH Block Hash to Oracle.
+        oracle.setEthBlockHash(_blockNumber, _block_hash);
+
+        assertEq(oracle.activePeriod(), _getCurrentPeriod());
+    }
+
+    function testSetBlockHashAlreadySet() public {
+        // Create Default Bribe.
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        // Build the proof.
+        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        // Get RLP Encoded proofs.
+        (bytes32 _block_hash,,) = getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+
+        // Submit ETH Block Hash to Oracle.
+        oracle.setEthBlockHash(_blockNumber, _block_hash);
+
+        assertEq(oracle.activePeriod(), _getCurrentPeriod());
+
+        vm.expectRevert(CurveGaugeControllerOracle.PERIOD_ALREADY_UPDATED.selector);
+        // Submit ETH Block Hash to Oracle.
+        oracle.setEthBlockHash(_blockNumber, _block_hash);
+    }
+
     function testClaimBribe() public {
         // Create Default Bribe.
-        uint256 _id = _createDefaultBribe();
+        uint256 _id = _createDefaultBribe(1 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
         // Build the proof.
@@ -53,9 +91,6 @@ contract PlatformXChainTest is Utils {
 
         // Submit ETH Block Hash to Oracle.
         oracle.setEthBlockHash(_blockNumber, _block_hash);
-
-        // Set Snapshot Block Number.
-        platform.setSnapshotBlock(_blockNumber);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
@@ -74,6 +109,82 @@ contract PlatformXChainTest is Utils {
         assertEq(claimed, 0);
     }
 
+    function testClaimWithBlacklistedAddress() public {
+        // Create Default Bribe.
+        uint256 _id = _createDefaultBribeWithBlacklist(2 weeks);
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        // Calculate blacklisted bias before sending proof.
+        uint256 _bBias = _gaugeController.vote_user_slopes(_blacklisted, _gauge).slope
+            * (_gaugeController.vote_user_slopes(_blacklisted, _gauge).end - _getCurrentPeriod());
+
+        // Build the proof.
+        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+
+        // Get RLP Encoded proofs.
+        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
+            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+
+        // Build the proof.
+        (,,, _positions,) = sender.generateEthProofParams(_blacklisted, _gauge, _getCurrentPeriod());
+
+        (,, bytes memory _blacklisted_proof_rlp) =
+            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+
+        // Submit ETH Block Hash to Oracle.
+        oracle.setEthBlockHash(_blockNumber, _block_hash);
+
+        bytes[] memory _blacklistedProofs = new bytes[](1);
+        _blacklistedProofs[0] = _blacklisted_proof_rlp;
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: _block_header_rlp,
+            userProofRlp: _proof_rlp,
+            blackListedProofsRlp: _blacklistedProofs
+        });
+
+        assertGt(platform.claim(_id, _proofData), 0);
+
+        // Get RLP Encoded proofs.
+        (uint256 _slope,, uint256 _bEnd) = oracle.voteUserSlope(_blockNumber, _blacklisted, _gauge);
+        assertEq(_bBias, _slope * (_bEnd - _getCurrentPeriod()));
+    }
+
+    function testCloseBribe() public {
+        // Create Default Bribe.
+        uint256 _id = _createDefaultBribe(3 weeks);
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        // Build the proof.
+        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+
+        // Get RLP Encoded proofs.
+        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
+            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+
+        // Submit ETH Block Hash to Oracle.
+        oracle.setEthBlockHash(_blockNumber, _block_hash);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: _block_header_rlp,
+            userProofRlp: _proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimed = platform.claim(_id, _proofData);
+        assertEq(claimed, 0);
+
+        vm.prank(_user);
+        platform.closeBribe(_id);
+        assertEq(rewardToken.balanceOf(_user), _amount);
+    }
+
     function _createCustomBribe(
         address gauge,
         address _rewardToken,
@@ -81,17 +192,26 @@ contract PlatformXChainTest is Utils {
         uint256 _maxRewardPerVote,
         uint256,
         address[] memory _blacklist,
-        bool upgradeable
+        bool upgradeable,
+        uint256 numberOfWeeks
     ) internal returns (uint256 _id) {
         _id = platform.createBribe(
             gauge, _user, address(_rewardToken), _numberOfPeriods, _maxRewardPerVote, _amount, _blacklist, upgradeable
         );
-        _overrideBribePeriod(_id);
+        _overrideBribePeriod(_id, numberOfWeeks);
     }
 
-    function _createDefaultBribe() internal returns (uint256 _id) {
+    function _createDefaultBribe(uint256 numberOfWeeks) internal returns (uint256 _id) {
         _id = platform.createBribe(_gauge, _user, address(rewardToken), 2, 2e18, _amount, new address[](0), true);
-        _overrideBribePeriod(_id);
+        _overrideBribePeriod(_id, numberOfWeeks);
+    }
+
+    function _createDefaultBribeWithBlacklist(uint256 numberOfWeeks) internal returns (uint256 _id) {
+        address[] memory _blacklist = new address[](1);
+        _blacklist[0] = _blacklisted;
+
+        _id = platform.createBribe(_gauge, _user, address(rewardToken), 2, 2e18, _amount, _blacklist, true);
+        _overrideBribePeriod(_id, numberOfWeeks);
     }
 
     function _getCurrentPeriod() internal view returns (uint256) {
@@ -99,12 +219,12 @@ contract PlatformXChainTest is Utils {
     }
 
     /// Move starting period to current period to avoid issues with calculating proof.
-    function _overrideBribePeriod(uint256 _id) internal {
+    function _overrideBribePeriod(uint256 _id, uint256 numberOfWeeks) internal {
         uint256 currentPeriod = _getCurrentPeriod();
         Platform.Bribe memory _bribe = platform.getBribe(_id);
 
         stdstore.target(address(platform)).sig("bribes(uint256)").with_key(_id).depth(4).checked_write(
-            _bribe.endTimestamp - 1 weeks
+            _bribe.endTimestamp - numberOfWeeks
         );
         stdstore.target(address(platform)).sig("activePeriod(uint256)").with_key(_id).depth(1).checked_write(
             currentPeriod

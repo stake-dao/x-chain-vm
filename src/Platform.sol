@@ -113,9 +113,13 @@ contract Platform is ReentrancyGuard {
     }
 
     struct ProofData {
+        // Address of user.
         address user;
+        // RLP Encoded header.
         bytes headerRlp;
+        // RLP Encoded proof.
         bytes userProofRlp;
+        // RLP Encoded blacklisted addresses proof.
         bytes[] blackListedProofsRlp;
     }
 
@@ -135,8 +139,9 @@ contract Platform is ReentrancyGuard {
     /// @notice Curve Gauge Controller Oracle.
     ICurveGaugeControllerOracle public immutable curveGaugeControllerOracle;
 
-    /// @notice snapshot block number
-    uint256 public snapshotBlock;
+    ////////////////////////////////////////////////////////////////
+    /// --- STORAGE VARS
+    ///////////////////////////////////////////////////////////////
 
     /// @notice Fee recipient address.
     address public feeRecipient;
@@ -146,10 +151,6 @@ contract Platform is ReentrancyGuard {
 
     /// @notice Governance address
     address public governance;
-
-    ////////////////////////////////////////////////////////////////
-    /// --- STORAGE VARS
-    ///////////////////////////////////////////////////////////////
 
     /// @notice Bribe ID Counter.
     uint256 public nextID;
@@ -376,6 +377,8 @@ contract Platform is ReentrancyGuard {
         // Update if needed the current period.
         uint256 currentPeriod = _updateBribePeriod(bribeId, proofData);
 
+        if (currentPeriod != curveGaugeControllerOracle.activePeriod()) return 0;
+
         Bribe storage bribe = bribes[bribeId];
         (, ICurveGaugeControllerOracle.VotedSlope memory votedSlope, uint256 lastVote,) = curveGaugeControllerOracle
             .extractProofState(proofData.user, bribe.gauge, proofData.headerRlp, proofData.userProofRlp);
@@ -439,8 +442,6 @@ contract Platform is ReentrancyGuard {
         // Increase Period
         if (block.timestamp >= _activePeriod.timestamp + _WEEK) {
             // Checkpoint gauge to have up to date gauge weight.
-            // #TODO: add checkpoint for gauge.
-            // gaugeController.checkpoint_gauge(bribes[bribeId].gauge);
             // Roll to next period.
             _rollOverToNextPeriod(bribeId, currentPeriod, proofData);
 
@@ -501,9 +502,7 @@ contract Platform is ReentrancyGuard {
             uint256 currentPeriod = getCurrentPeriod();
             uint256 gaugeBias =
                 _getAdjustedBias(bribes[bribeId].gauge, bribes[bribeId].blacklist, currentPeriod, proofData);
-            if (gaugeBias != 0) {
-                rewardPerToken[bribeId] = activePeriod[bribeId].rewardPerPeriod.mulDivDown(_BASE_UNIT, gaugeBias);
-            }
+            rewardPerToken[bribeId] = activePeriod[bribeId].rewardPerPeriod.mulDivDown(_BASE_UNIT, gaugeBias);
         }
     }
 
@@ -522,6 +521,7 @@ contract Platform is ReentrancyGuard {
         uint256 period,
         ProofData memory proofData
     ) internal returns (uint256 gaugeBias) {
+        uint256 snapshotBlock = curveGaugeControllerOracle.last_eth_block_number();
         // Cache the user slope.
         ICurveGaugeControllerOracle.VotedSlope memory userSlope;
         // Bias
@@ -545,7 +545,11 @@ contract Platform is ReentrancyGuard {
             for (uint256 i = 0; i < length;) {
                 // Get the user slope.
                 userSlope = _submitState(
-                    _addressesBlacklisted[i], gauge, proofData.headerRlp, proofData.blackListedProofsRlp[i]
+                    _addressesBlacklisted[i],
+                    gauge,
+                    proofData.headerRlp,
+                    proofData.blackListedProofsRlp[i],
+                    snapshotBlock
                 );
                 // Remove the user bias from the gauge bias.
                 _bias = _getAddrBias(userSlope.slope, userSlope.end, period);
@@ -628,11 +632,6 @@ contract Platform is ReentrancyGuard {
         isKilled = true;
     }
 
-    function setSnapshotBlock(uint256 _block) external {
-        if (msg.sender != governance) revert NOT_GOVERNANCE();
-        snapshotBlock = _block;
-    }
-
     function setGovernance(address _governance) external {
         if (msg.sender != governance) revert NOT_GOVERNANCE();
         governance = _governance;
@@ -652,10 +651,13 @@ contract Platform is ReentrancyGuard {
     /// --- UTILS FUNCTIONS
     ///////////////////////////////////////////////////////////////
 
-    function _submitState(address _user, address _gauge, bytes memory _headerRlp, bytes memory _proofRlp)
-        internal
-        returns (ICurveGaugeControllerOracle.VotedSlope memory slope)
-    {
+    function _submitState(
+        address _user,
+        address _gauge,
+        bytes memory _headerRlp,
+        bytes memory _proofRlp,
+        uint256 snapshotBlock
+    ) internal returns (ICurveGaugeControllerOracle.VotedSlope memory slope) {
         if (!curveGaugeControllerOracle.isUserUpdated(snapshotBlock, _user, _gauge)) {
             curveGaugeControllerOracle.submit_state(_user, _gauge, _headerRlp, _proofRlp);
             if (!curveGaugeControllerOracle.isUserUpdated(snapshotBlock, _user, _gauge)) {
