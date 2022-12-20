@@ -179,6 +179,9 @@ contract Platform is ReentrancyGuard {
     /// @notice Last time a user claimed
     mapping(address => mapping(uint256 => uint256)) public lastUserClaim;
 
+    /// @notice Whitelisted Address(Liquid Wrappers) to prevent claiming on their behalf if no recipient is set.
+    mapping(address => bool) public whitelisted;
+
     ////////////////////////////////////////////////////////////////
     /// --- MODIFIERS
     ///////////////////////////////////////////////////////////////
@@ -242,13 +245,14 @@ contract Platform is ReentrancyGuard {
     error WRONG_INPUT();
     error ZERO_ADDRESS();
     error INVALID_GAUGE();
+    error NOT_GOVERNANCE();
     error NOT_UPGRADEABLE();
-    error AUTH_MANAGER_ONLY();
+    error USER_NOT_UPDATED();
     error ALREADY_INCREASED();
+    error AUTH_MANAGER_ONLY();
     error NOT_ALLOWED_OPERATION();
     error INVALID_NUMBER_OF_PERIODS();
-    error USER_NOT_UPDATED();
-    error NOT_GOVERNANCE();
+    error NO_RECEIVER_SET_FOR_WHITELISTED();
 
     ////////////////////////////////////////////////////////////////
     /// --- CONSTRUCTOR
@@ -419,8 +423,13 @@ contract Platform is ReentrancyGuard {
             // Transfer fees.
             ERC20(bribe.rewardToken).safeTransfer(feeRecipient, feeAmount);
         }
+
+        address receiver = curveGaugeControllerOracle.recipient(proofData.user);
+        if (whitelisted[proofData.user] && receiver == address(0)) revert NO_RECEIVER_SET_FOR_WHITELISTED();
+        receiver = receiver != address(0) ? receiver : proofData.user;
+
         //Transfer to user
-        ERC20(bribe.rewardToken).safeTransfer(proofData.user, amount);
+        ERC20(bribe.rewardToken).safeTransfer(receiver, amount);
 
         emit Claimed(proofData.user, bribe.rewardToken, bribeId, amount, currentPeriod);
     }
@@ -645,6 +654,11 @@ contract Platform is ReentrancyGuard {
     function setFeeRecipient(address _feeRecipient) external {
         if (msg.sender != governance) revert NOT_GOVERNANCE();
         feeRecipient = _feeRecipient;
+    }
+
+    function whitelistAddress(address _address, bool _isWhitelist) external {
+        if (msg.sender != governance) revert NOT_GOVERNANCE();
+        whitelisted[_address] = _isWhitelist;
     }
 
     ////////////////////////////////////////////////////////////////

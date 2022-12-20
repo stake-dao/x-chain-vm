@@ -17,6 +17,8 @@ interface ICurveGaugeControllerOracle {
 
     function activePeriod() external view returns (uint256);
 
+    function recipient(address _sender) external view returns (address);
+
     function last_eth_block_number() external view returns (uint256);
 
     function voteUserSlope(uint256 _block, address _user, address _gauge) external view returns (VotedSlope memory);

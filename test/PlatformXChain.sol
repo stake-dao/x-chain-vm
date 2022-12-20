@@ -40,6 +40,38 @@ contract PlatformXChainTest is Utils {
         rewardToken.approve(address(platform), _amount);
     }
 
+    function testSetRecipient() public {
+        address FAKE_RECIPIENT = address(0xCACA);
+        oracle.setRecipient(_user, FAKE_RECIPIENT);
+        assertEq(oracle.recipient(_user), FAKE_RECIPIENT);
+    }
+
+    function testSetRecipientWrongAuth() public {
+        address FAKE_RECIPIENT = address(0xCACA);
+
+        // Random User
+        vm.prank(address(0x1));
+        vm.expectRevert(CurveGaugeControllerOracle.NOT_OWNER.selector);
+        oracle.setRecipient(_user, FAKE_RECIPIENT);
+    }
+
+    function testWhitelist() public {
+        platform.whitelistAddress(_user, true);
+        assertTrue(platform.whitelisted(_user));
+
+        platform.whitelistAddress(_user, false);
+        assertFalse(platform.whitelisted(_user));
+    }
+
+    function testWhitelistWrongAuth() public {
+        // Random User
+        vm.prank(address(0x1));
+        vm.expectRevert(Platform.NOT_GOVERNANCE.selector);
+        platform.whitelistAddress(_user, true);
+
+        assertFalse(platform.whitelisted(_user));
+    }
+
     function testSetBlockHash() public {
         // Create Default Bribe.
         _gaugeController.checkpoint_gauge(_gauge);
@@ -74,6 +106,119 @@ contract PlatformXChainTest is Utils {
         vm.expectRevert(CurveGaugeControllerOracle.PERIOD_ALREADY_UPDATED.selector);
         // Submit ETH Block Hash to Oracle.
         oracle.setEthBlockHash(_blockNumber, _block_hash);
+    }
+
+
+    function testClaimBribeWithWhitelistedRecipientNotSet() public {
+        // Create Default Bribe.
+        uint256 _id = _createDefaultBribe(1 weeks);
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        // Build the proof.
+        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+
+        // Get RLP Encoded proofs.
+        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
+            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+
+        // Submit ETH Block Hash to Oracle.
+        oracle.setEthBlockHash(_blockNumber, _block_hash);
+
+        platform.whitelistAddress(_user, true);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: _block_header_rlp,
+            userProofRlp: _proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        vm.expectRevert(Platform.NO_RECEIVER_SET_FOR_WHITELISTED.selector);
+        platform.claim(_id, _proofData);
+    }
+
+    function testClaimBribeWithRecipientSet() public {
+        // Create Default Bribe.
+        uint256 _id = _createDefaultBribe(1 weeks);
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        // Build the proof.
+        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+
+        // Get RLP Encoded proofs.
+        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
+            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+
+        // Submit ETH Block Hash to Oracle.
+        oracle.setEthBlockHash(_blockNumber, _block_hash);
+
+        address FAKE_RECIPIENT = address(0xCACA);
+        oracle.setRecipient(_user, FAKE_RECIPIENT);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: _block_header_rlp,
+            userProofRlp: _proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimed = platform.claim(_id, _proofData);
+
+        assertGt(claimed, 0);
+
+        assertEq(rewardToken.balanceOf(_user), 0);
+        assertEq(rewardToken.balanceOf(FAKE_RECIPIENT), claimed);
+
+        assertGt(platform.rewardPerToken(_id), 0);
+
+        claimed = platform.claim(_id, _proofData);
+        assertEq(claimed, 0);
+    }
+
+    function testClaimBribeWithWhitelistedRecipientSet() public {
+        // Create Default Bribe.
+        uint256 _id = _createDefaultBribe(1 weeks);
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        // Build the proof.
+        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+
+        // Get RLP Encoded proofs.
+        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
+            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+
+        // Submit ETH Block Hash to Oracle.
+        oracle.setEthBlockHash(_blockNumber, _block_hash);
+
+        platform.whitelistAddress(_user, true);
+
+        address FAKE_RECIPIENT = address(0xCACA);
+        oracle.setRecipient(_user, FAKE_RECIPIENT);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: _block_header_rlp,
+            userProofRlp: _proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimed = platform.claim(_id, _proofData);
+
+        assertGt(claimed, 0);
+
+        assertEq(rewardToken.balanceOf(_user), 0);
+        assertEq(rewardToken.balanceOf(FAKE_RECIPIENT), claimed);
+
+        assertGt(platform.rewardPerToken(_id), 0);
+
+        claimed = platform.claim(_id, _proofData);
+        assertEq(claimed, 0);
     }
 
     function testClaimBribe() public {

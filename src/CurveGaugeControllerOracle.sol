@@ -55,6 +55,9 @@ contract CurveGaugeControllerOracle {
     /// Owner of the contract with special privileges
     address public owner;
 
+    /// Mapping of desired recipient for an address.
+    mapping(address => address) public recipient;
+
     mapping(address => mapping(uint256 => Point)) public pointWeights; // gauge => block => Point
     mapping(uint256 => mapping(address => mapping(address => bool))) public isUserUpdated; // block -> user -> gauge -> bool
     mapping(uint256 => mapping(address => mapping(address => uint256))) public lastUserVote; // block -> user -> gauge -> lastUserVote
@@ -62,6 +65,8 @@ contract CurveGaugeControllerOracle {
 
     /// Log a blockhash update
     event SetBlockhash(uint256 _eth_block_number, bytes32 _eth_blockhash);
+
+    event SetRecipient(address indexed _user, address indexed _recipient);
 
     constructor(address _anyCall) {
         owner = msg.sender;
@@ -212,6 +217,20 @@ contract CurveGaugeControllerOracle {
     function setAnycall(address _anycall) external {
         if (msg.sender != owner) revert NOT_OWNER();
         ANYCALL = _anycall;
+    }
+
+    function setRecipient(address _sender, address _recipient) external {
+        // either a cross-chain call from `self` or `owner` is valid to set the blockhash
+        if (msg.sender == ANYCALL) {
+            (address sender, uint256 from_chain_id) = IAnyCallProxy(msg.sender).context();
+            if (sender != address(this) || from_chain_id != 1) revert WRONG_CONTEXT();
+        } else {
+            if (msg.sender != owner) revert NOT_OWNER();
+        }
+
+        recipient[_sender] = _recipient;
+
+        emit SetRecipient(_sender, _recipient);
     }
 
     function setEthBlockHash(uint256 _eth_block_number, bytes32 __eth_blockhash) external {
