@@ -8,7 +8,7 @@ FOUNDRY_ETH_RPC_URL?=$(ETH_RPC_URL)
 ETHERSCAN_API_KEY?=${ETHERSCAN_KEY}
 
 snapshot:; @forge snapshot  
-test:; @forge test  --match-contract "PlatformXChainTest" --gas-report
+test:; @forge test  --match-contract "PlatformXChainTest" --match-test testSetBlockHashWithAxelar --gas-report
 node:; @anvil --fork-url ${ETH_RPC_URL} --steps-tracing
 
 .PHONY: test default

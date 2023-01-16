@@ -4,10 +4,10 @@ pragma solidity 0.8.17;
 import "test/utils/Utils.sol";
 
 import {GaugeController} from "src/interfaces/GaugeController.sol";
-import {EthereumStateSender} from "src/merkle-utils/EthereumStateSender.sol";
+import {EthereumStateSender} from "src/EthereumStateSender.sol";
 import {CurveGaugeControllerOracle} from "src/CurveGaugeControllerOracle.sol";
 
-contract ProofExtractor is Utils {
+contract ProofExtractorTest is Utils {
     EthereumStateSender sender;
     CurveGaugeControllerOracle oracle;
 
