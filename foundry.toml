@@ -7,5 +7,6 @@ ffi = true
 
 remappings = [
     "forge-std/=lib/forge-std/src/",
-    "solmate/=lib/solmate/src/"
+    "solmate/=lib/solmate/src/",
+    "solady/=lib/solady/src/"
 ]
