@@ -48,3 +48,5 @@ graph TD
 	AxelarGateway --> AxelarExecutable
 	AxelarExecutable --> CurveGaugeControllerOracle
 ```
+
+To get Gauges weight, User vote data, `Platform` contract would query the CurveGaugeController Oracle.
