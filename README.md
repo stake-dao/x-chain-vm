@@ -38,7 +38,7 @@ sidechains. To be able to claim their bribes, users would have to provide Encode
 ```mermaid
 graph TD
 	EOA --> EthereumStateSender
-	StateSender --> AxelarGateWay
+	EthereumStateSender --> AxelarGateWay
 ```
 
 ### Sidechains side
