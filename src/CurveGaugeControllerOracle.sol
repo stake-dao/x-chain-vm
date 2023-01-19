@@ -1,16 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import {Owned} from "solmate/auth/Owned.sol";
-import {LibString} from "solady/utils/LibString.sol";
 import {RLPReader} from "src/merkle-utils/RLPReader.sol";
+import {IAnyCallProxy} from "src/interfaces/IAnyCallProxy.sol";
 import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
 
-contract CurveGaugeControllerOracle is Owned {
+contract CurveGaugeControllerOracle {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
-    using LibString for address;
-    using LibString for string;
 
     struct Point {
         uint256 bias;
@@ -35,15 +32,14 @@ contract CurveGaugeControllerOracle is Owned {
     error NOT_OWNER();
     error INVALID_HASH();
     error WRONG_CONTEXT();
-    error WRONG_SOURCE_CHAIN();
-    error WRONG_SOURCE_ADDRESS();
     error INVALID_BLOCK_HEADER();
     error INVALID_PROOF_LENGTH();
     error INVALID_HASH_MISMATCH();
     error PERIOD_ALREADY_UPDATED();
     error GAUGE_CONTROLLER_NOT_FOUND();
 
-    address public axelarExecutable;
+    /// Address of the AnyCallProxy for the chain this contract is deployed on
+    address public ANYCALL;
 
     /// Mapping of Ethereum block number to blockhash
     mapping(uint256 => bytes32) private _eth_blockhash;
@@ -56,29 +52,29 @@ contract CurveGaugeControllerOracle is Owned {
 
     uint256 public activePeriod;
 
+    /// Owner of the contract with special privileges
+    address public owner;
+
     /// Mapping of desired recipient for an address.
     mapping(address => address) public recipient;
 
-    /// @notice Mapping of Gauge => Block Number => Point Weight Struct.
-    mapping(address => mapping(uint256 => Point)) public pointWeights;
-
-    /// @notice Mapping of Block Number => Address => Gauge => isUpdated for the specific block number.
-    mapping(uint256 => mapping(address => mapping(address => bool))) public isUserUpdated;
-
-    /// @notice Mapping of Block Number => Address => Gauge => lastUserVote timestamp.
-    mapping(uint256 => mapping(address => mapping(address => uint256))) public lastUserVote;
-
-    /// @notice Mapping of Block Number => Address => Gauge => VotedSlope values.
-    mapping(uint256 => mapping(address => mapping(address => VotedSlope))) public voteUserSlope;
+    mapping(address => mapping(uint256 => Point)) public pointWeights; // gauge => block => Point
+    mapping(uint256 => mapping(address => mapping(address => bool))) public isUserUpdated; // block -> user -> gauge -> bool
+    mapping(uint256 => mapping(address => mapping(address => uint256))) public lastUserVote; // block -> user -> gauge -> lastUserVote
+    mapping(uint256 => mapping(address => mapping(address => VotedSlope))) public voteUserSlope; // block -> user -> gauge -> VotedSlope
 
     /// Log a blockhash update
     event SetBlockhash(uint256 _eth_block_number, bytes32 _eth_blockhash);
 
     event SetRecipient(address indexed _user, address indexed _recipient);
 
-    constructor(address _axelarExecutable) Owned(msg.sender) {
-        axelarExecutable = _axelarExecutable;
-        emit SetBlockhash(0, _eth_blockhash[0] = GENESIS_BLOCKHASH);
+    constructor(address _anyCall) {
+        owner = msg.sender;
+        _eth_blockhash[0] = GENESIS_BLOCKHASH;
+
+        ANYCALL = _anyCall;
+
+        emit SetBlockhash(0, GENESIS_BLOCKHASH);
     }
 
     function submit_state(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
@@ -218,25 +214,36 @@ contract CurveGaugeControllerOracle is Owned {
         }
     }
 
-    function setAxelarExecutable(address _axelarExecutable) external {
+    function setAnycall(address _anycall) external {
         if (msg.sender != owner) revert NOT_OWNER();
-        axelarExecutable = _axelarExecutable;
+        ANYCALL = _anycall;
     }
 
-    function setRecipient(address _sender, address _recipient) external {
+    function set_recipient(address _sender, address _recipient) external {
         // either a cross-chain call from `self` or `owner` is valid to set the blockhash
-        if (msg.sender != owner && msg.sender != address(axelarExecutable)) revert NOT_OWNER();
+        if (msg.sender == ANYCALL) {
+            (address sender, uint256 from_chain_id) = IAnyCallProxy(msg.sender).context();
+            if (sender != address(this) || from_chain_id != 1) revert WRONG_CONTEXT();
+        } else {
+            if (msg.sender != owner) revert NOT_OWNER();
+        }
 
         recipient[_sender] = _recipient;
+
         emit SetRecipient(_sender, _recipient);
     }
 
-    function setEthBlockHash(uint256 _eth_block_number, bytes32 __eth_blockhash) public {
-        // either a cross-chain call from `self` or `owner` is valid to set the blockhash
-        if (msg.sender != owner && msg.sender != address(axelarExecutable)) revert NOT_OWNER();
-
+    function set_eth_blockhash(uint256 _eth_block_number, bytes32 __eth_blockhash) external {
         uint256 _period = block.timestamp / 1 weeks * 1 weeks;
         if (activePeriod >= _period) revert PERIOD_ALREADY_UPDATED();
+
+        // either a cross-chain call from `self` or `owner` is valid to set the blockhash
+        if (msg.sender == ANYCALL) {
+            (address sender, uint256 from_chain_id) = IAnyCallProxy(msg.sender).context();
+            if (sender != address(this) || from_chain_id != 1) revert WRONG_CONTEXT();
+        } else {
+            if (msg.sender != owner) revert NOT_OWNER();
+        }
 
         // set the blockhash in storage
         _eth_blockhash[_eth_block_number] = __eth_blockhash;

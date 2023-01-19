@@ -1,41 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import {LibString} from "solady/utils/LibString.sol";
-import {IAxelarGateway} from "src/interfaces/IAxelarGateway.sol";
+import "src/interfaces/IAnyCallProxy.sol";
 
 contract EthereumStateSender {
-    using LibString for address;
+    address public constant ANYCALL_PROXY = 0x37414a8662bC1D25be3ee51Fb27C2686e2490A89;
 
-    address public constant AXELAR_GATEWAY = 0x4F4495243837681061C4743b74B3eEdf548D56A5;
+    mapping(uint256 => uint256) public lastSent;
 
-    event RecipientSet(address indexed _sender, address indexed _recipient, string _destinationChain);
-    event BlockhashSent(uint256 indexed _blockNumber, bytes32 _blockHash, string _destinationChain);
-
-    function sendBlockhash(string calldata destinationChain, address destinationContract, uint256 _blockNumber)
-        external
-    {
+    function sendBlockhash(uint256 _blockNumber, uint256 _chainId) external {
         bytes32 blockHash = blockhash(_blockNumber);
 
-        string memory _destinationContract = destinationContract.toHexStringChecksumed();
+        lastSent[_chainId] = _blockNumber;
 
-        IAxelarGateway(AXELAR_GATEWAY).callContract(
-            destinationChain,
-            _destinationContract,
-            abi.encode("setEthBlockHash(uint256,bytes32)", _blockNumber, blockHash)
+        IAnyCallProxy(ANYCALL_PROXY).anyCall(
+            address(this), abi.encode(_blockNumber, blockHash, 0x0fb997cc), address(0), _chainId
         );
-
-        emit BlockhashSent(_blockNumber, blockHash, destinationChain);
     }
 
-    function setRecipient(string calldata destinationChain, address destinationContract, address _recipient) external {
-        string memory _destinationContract = destinationContract.toHexStringChecksumed();
-
-        IAxelarGateway(AXELAR_GATEWAY).callContract(
-            destinationChain, _destinationContract, abi.encode("setRecipient(address,address)", msg.sender, _recipient)
+    function setRecipient(address _recipient, uint256 _chainId) external {
+        IAnyCallProxy(ANYCALL_PROXY).anyCall(
+            address(this),
+            abi.encodeWithSignature("set_recipient(address,address)", msg.sender, _recipient),
+            address(0),
+            _chainId
         );
-
-        emit RecipientSet(msg.sender, _recipient, destinationChain);
     }
 
     function generateEthProofParams(address _user, address _gauge, uint256 _time)
