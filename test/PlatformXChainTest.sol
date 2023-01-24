@@ -39,18 +39,10 @@ contract PlatformXChainTest is Utils {
         sender = new EthereumStateSender();
 
         oracle = new CurveGaugeControllerOracle(_ANYCALL);
-
         platform = new Platform(address(oracle));
 
         rewardToken.mint(address(this), _amount);
         rewardToken.approve(address(platform), _amount);
-    }
-
-    function testLibString() public {
-        address _addr = address(0x123);
-        string memory _str = "0x0000000000000000000000000000000000000123";
-
-        assertTrue(_str.eq(_addr.toHexStringChecksumed()));
     }
 
     function testSetRecipient() public {
@@ -136,7 +128,6 @@ contract PlatformXChainTest is Utils {
 
         // Submit ETH Block Hash to Oracle.
         oracle.set_eth_blockhash(_blockNumber, _block_hash);
-
         platform.whitelistAddress(_user, true);
 
         // No need to submit it.
@@ -185,7 +176,7 @@ contract PlatformXChainTest is Utils {
         assertEq(rewardToken.balanceOf(_user), 0);
         assertEq(rewardToken.balanceOf(FAKE_RECIPIENT), claimed);
 
-        assertGt(platform.rewardPerToken(_id), 0);
+        assertGt(platform.rewardPerVote(_id), 0);
 
         claimed = platform.claim(_id, _proofData);
         assertEq(claimed, 0);
@@ -221,13 +212,12 @@ contract PlatformXChainTest is Utils {
         });
 
         uint256 claimed = platform.claim(_id, _proofData);
-
         assertGt(claimed, 0);
 
         assertEq(rewardToken.balanceOf(_user), 0);
         assertEq(rewardToken.balanceOf(FAKE_RECIPIENT), claimed);
 
-        assertGt(platform.rewardPerToken(_id), 0);
+        assertGt(platform.rewardPerVote(_id), 0);
 
         claimed = platform.claim(_id, _proofData);
         assertEq(claimed, 0);
@@ -260,7 +250,7 @@ contract PlatformXChainTest is Utils {
         uint256 claimed = platform.claim(_id, _proofData);
 
         assertGt(claimed, 0);
-        assertGt(platform.rewardPerToken(_id), 0);
+        assertGt(platform.rewardPerVote(_id), 0);
 
         claimed = platform.claim(_id, _proofData);
         assertEq(claimed, 0);

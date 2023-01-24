@@ -229,7 +229,6 @@ contract CurveGaugeControllerOracle {
         }
 
         recipient[_sender] = _recipient;
-
         emit SetRecipient(_sender, _recipient);
     }
 
