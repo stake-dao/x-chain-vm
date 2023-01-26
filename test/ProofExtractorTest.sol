@@ -35,7 +35,7 @@ contract ProofExtractorTest is Utils {
             getRLPEncodedProofs("mainnet", _gaugeController, _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.set_eth_blockhash(_blockNumber, _block_hash);
+        oracle.setEthBlockHash(_blockNumber, _block_hash);
 
         // Submit State to Oracle.
         oracle.submit_state(_user, _gauge, _block_header_rlp, _proof_rlp);
