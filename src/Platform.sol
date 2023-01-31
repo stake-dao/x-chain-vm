@@ -390,12 +390,23 @@ contract Platform is ReentrancyGuard {
         if (isBlacklisted[bribeId][proofData.user]) return 0;
         // Update if needed the current period.
         uint256 currentPeriod = _updateBribePeriod(bribeId, proofData);
+        uint256 snapshotBlock = curveGaugeControllerOracle.last_eth_block_number();
 
         if (currentPeriod != curveGaugeControllerOracle.activePeriod()) return 0;
 
         Bribe storage bribe = bribes[bribeId];
-        (, ICurveGaugeControllerOracle.VotedSlope memory votedSlope, uint256 lastVote,) = curveGaugeControllerOracle
-            .extractProofState(proofData.user, bribe.gauge, proofData.headerRlp, proofData.userProofRlp);
+
+        ICurveGaugeControllerOracle.VotedSlope memory votedSlope;
+        uint256 lastVote;
+
+        if (curveGaugeControllerOracle.isUserUpdated(snapshotBlock, proofData.user, bribe.gauge)) {
+            votedSlope = curveGaugeControllerOracle.voteUserSlope(snapshotBlock, proofData.user, bribe.gauge);
+            lastVote = curveGaugeControllerOracle.lastUserVote(snapshotBlock, proofData.user, bribe.gauge);
+        } else {
+            (, votedSlope, lastVote,) = curveGaugeControllerOracle.extractProofState(
+                proofData.user, bribe.gauge, proofData.headerRlp, proofData.userProofRlp
+            );
+        }
 
         // End timestamp of the bribe.
         uint256 endTimestamp = bribe.endTimestamp;
