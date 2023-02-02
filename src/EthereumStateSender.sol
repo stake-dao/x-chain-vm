@@ -9,12 +9,48 @@ contract EthereumStateSender {
 
     address public constant AXELAR_GATEWAY = 0x4F4495243837681061C4743b74B3eEdf548D56A5;
 
+    uint256 public lastBlockNumber;
+
+    error TO_NEW();
+    error TOO_OLD();
+    error WRONG_INPUT();
+    error UNBOUND_TIMESTAMP();
+    error WRONG_INPUT_FUTURE_BLOCK();
+
+    constructor() {
+        lastBlockNumber = block.number;
+    }
+
+    /// @notice Emitted when a recipient is set
+    /// @param _sender The sender of the transaction
+    /// @param _recipient The recipient of the transaction
+    /// @param _destinationChain The destination chain
     event RecipientSet(address indexed _sender, address indexed _recipient, string _destinationChain);
+
+    /// @notice Emitted when a blockhash is sent
+    /// @param _blockNumber The block number
+    /// @param _blockHash The block hash
+    /// @param _destinationChain The destination chain
     event BlockhashSent(uint256 indexed _blockNumber, bytes32 _blockHash, string _destinationChain);
 
+    /// @notice     Send a blockhash to a destination chain
+    /// @param      destinationChain The destination chain
+    /// @param      destinationContract The destination contract
+    /// @param      _blockNumber The block number
     function sendBlockhash(string calldata destinationChain, address destinationContract, uint256 _blockNumber)
         external
     {
+        uint256 nextPeriod = getNextPeriod();
+
+        uint256 minPeriod = nextPeriod - 604800; // 1 week
+        uint256 maxPeriod = nextPeriod - 594000; // 1 week + 3 hours
+
+        /// Between the end of the previous period and the start of the next period
+        if (block.timestamp > minPeriod && block.timestamp < maxPeriod) revert UNBOUND_TIMESTAMP();
+
+        if (block.number - _blockNumber < 40) revert TO_NEW();
+        if (block.number - _blockNumber > 256) revert TOO_OLD();
+
         bytes32 blockHash = blockhash(_blockNumber);
 
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
@@ -25,9 +61,13 @@ contract EthereumStateSender {
             abi.encode("setEthBlockHash(uint256,bytes32)", _blockNumber, blockHash)
         );
 
-        emit BlockhashSent(_blockNumber, blockHash, destinationChain);
+        emit BlockhashSent(lastBlockNumber = _blockNumber, blockHash, destinationChain);
     }
 
+    /// @notice    Set a recipient for a destination chain
+    /// @param     destinationChain The destination chain
+    /// @param     destinationContract The destination contract
+    /// @param     _recipient The recipient
     function setRecipient(string calldata destinationChain, address destinationContract, address _recipient) external {
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
 
@@ -38,6 +78,10 @@ contract EthereumStateSender {
         emit RecipientSet(msg.sender, _recipient, destinationChain);
     }
 
+    /// @notice   Generate proof parameters for a given user, gauge and time
+    /// @param    _user The user
+    /// @param    _gauge The gauge
+    /// @param    _time The time
     function generateEthProofParams(address _user, address _gauge, uint256 _time)
         external
         view
@@ -58,5 +102,13 @@ contract EthereumStateSender {
             _positions[3 + i] = voteUserSlopePosition + i;
         }
         return (_user, _gauge, _time, _positions, block.number);
+    }
+
+    function getNextPeriod() public view returns (uint256) {
+        return (block.timestamp / 1 weeks * 1 weeks) + 1 weeks;
+    }
+
+    function getCurrentPeriod() public view returns (uint256) {
+        return (block.timestamp / 1 weeks * 1 weeks);
     }
 }

@@ -235,7 +235,7 @@ contract CurveGaugeControllerOracle is Owned {
         // either a cross-chain call from `self` or `owner` is valid to set the blockhash
         if (msg.sender != owner && msg.sender != address(axelarExecutable)) revert NOT_OWNER();
 
-        uint256 _period = block.timestamp / 1 weeks * 1 weeks;
+        uint256 _period = block.timestamp / 1 weeks * 1 weeks + 1 weeks;
         if (activePeriod >= _period) revert PERIOD_ALREADY_UPDATED();
 
         // set the blockhash in storage
