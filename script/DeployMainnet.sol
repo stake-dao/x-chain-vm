@@ -8,8 +8,10 @@ import {EthereumStateSender} from "src/EthereumStateSender.sol";
 contract DeploySideChains is Script {
     EthereumStateSender sender;
 
+    address internal constant DEPLOYER = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;
+
     function run() public {
-        vm.startBroadcast();
+        vm.startBroadcast(DEPLOYER);
 
         sender = new EthereumStateSender();
 

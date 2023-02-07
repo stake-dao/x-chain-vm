@@ -18,8 +18,10 @@ contract DeploySideChains is Script {
     CurveGaugeControllerOracle oracle;
     AxelarExecutable axelarExecutable;
 
+    address internal constant DEPLOYER = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;
+
     function run() public {
-        vm.startBroadcast();
+        vm.startBroadcast(DEPLOYER);
 
         oracle = new CurveGaugeControllerOracle(address(0));
         axelarExecutable = new AxelarExecutable(_AXELAR_GATEWAY, ETH_STATE_SENDER, address(oracle));
