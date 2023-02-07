@@ -9,17 +9,9 @@ contract EthereumStateSender {
 
     address public constant AXELAR_GATEWAY = 0x4F4495243837681061C4743b74B3eEdf548D56A5;
 
-    uint256 public lastBlockNumber;
-
-    error TO_NEW();
-    error TOO_OLD();
-    error WRONG_INPUT();
-    error UNBOUND_TIMESTAMP();
-    error WRONG_INPUT_FUTURE_BLOCK();
-
-    constructor() {
-        lastBlockNumber = block.number;
-    }
+    mapping(uint256 => uint256) public blockNumbers;
+    mapping(uint256 => bytes32) public blockHashes;
+    mapping(uint256 => mapping(string => uint256)) public destinationChains; 
 
     /// @notice Emitted when a recipient is set
     /// @param _sender The sender of the transaction
@@ -33,35 +25,46 @@ contract EthereumStateSender {
     /// @param _destinationChain The destination chain
     event BlockhashSent(uint256 indexed _blockNumber, bytes32 _blockHash, string _destinationChain);
 
-    /// @notice     Send a blockhash to a destination chain
+    /// @notice     Send a blockhash to a destination chain (it will use the current block's blockhash)
     /// @param      destinationChain The destination chain
     /// @param      destinationContract The destination contract
-    /// @param      _blockNumber The block number
-    function sendBlockhash(string calldata destinationChain, address destinationContract, uint256 _blockNumber)
-        external
+    function sendBlockhash(string calldata destinationChain, address destinationContract)
+        public
     {
-        uint256 nextPeriod = getNextPeriod();
+        uint256 currentPeriod = getCurrentPeriod();
 
-        uint256 minPeriod = nextPeriod - 604800; // 1 week
-        uint256 maxPeriod = nextPeriod - 594000; // 1 week + 3 hours
+        // Only one submission per period
+        if (blockNumbers[currentPeriod] == 0) {
+            blockHashes[currentPeriod] = blockhash(block.number);
+            blockNumbers[currentPeriod] = block.number;
+        }
 
-        /// Between the end of the previous period and the start of the next period
-        if (block.timestamp > minPeriod && block.timestamp < maxPeriod) revert UNBOUND_TIMESTAMP();
+        if (destinationChains[currentPeriod][destinationChain] == 0) {
+            string memory _destinationContract = destinationContract.toHexStringChecksumed();
 
-        if (block.number - _blockNumber < 40) revert TO_NEW();
-        if (block.number - _blockNumber > 256) revert TOO_OLD();
+            IAxelarGateway(AXELAR_GATEWAY).callContract(
+                destinationChain,
+                _destinationContract,
+                abi.encode("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod])
+            );
 
-        bytes32 blockHash = blockhash(_blockNumber);
+            destinationChains[currentPeriod][destinationChain] += 1;
 
-        string memory _destinationContract = destinationContract.toHexStringChecksumed();
+            emit BlockhashSent(blockNumbers[currentPeriod], blockHashes[currentPeriod], destinationChain);
+        }
+    }
 
-        IAxelarGateway(AXELAR_GATEWAY).callContract(
-            destinationChain,
-            _destinationContract,
-            abi.encode("setEthBlockHash(uint256,bytes32)", _blockNumber, blockHash)
-        );
-
-        emit BlockhashSent(lastBlockNumber = _blockNumber, blockHash, destinationChain);
+    /// @notice     Send a blockhash to a a list of destination chains (it will use the current block's blockhash)
+    /// @param      _destinationChains The destination chains array
+    /// @param      _destinationContracts The destination contracts array
+    function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts) external {
+        uint256 lenght = _destinationChains.length;
+        for (uint256 i; i < lenght;) {
+            sendBlockhash(_destinationChains[i], _destinationContracts[i]);
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     /// @notice    Set a recipient for a destination chain
@@ -102,10 +105,6 @@ contract EthereumStateSender {
             _positions[3 + i] = voteUserSlopePosition + i;
         }
         return (_user, _gauge, _time, _positions, block.number);
-    }
-
-    function getNextPeriod() public view returns (uint256) {
-        return (block.timestamp / 1 weeks * 1 weeks) + 1 weeks;
     }
 
     function getCurrentPeriod() public view returns (uint256) {
