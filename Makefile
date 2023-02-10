@@ -9,6 +9,8 @@ ETHERSCAN_API_KEY?=${ETHERSCAN_KEY}
 
 snapshot:; @forge snapshot  
 test:; @forge test  --match-contract "PlatformXChainTest" --gas-report
+test-extractor:; @forge test  --match-contract "ProofExtractorTest" --fork-url ${ETH_RPC_URL} --gas-report
+test-claim:; @forge test  --match-contract "PlatformXChainTest" --gas-report
 node:; @anvil --fork-url ${ETH_RPC_URL} --steps-tracing
 
 .PHONY: test default
