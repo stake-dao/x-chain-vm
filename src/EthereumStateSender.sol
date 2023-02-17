@@ -57,7 +57,7 @@ contract EthereumStateSender {
                     destinationChain, 
                     _destinationContract, 
                     payload,
-                    msg.sender
+                    address(this)
                 );
             }
             IAxelarGateway(AXELAR_GATEWAY).callContract(
@@ -142,6 +142,16 @@ contract EthereumStateSender {
     function setSendBlockhashValue(uint256 _sendBlockHashValue) external {
         if (msg.sender != admin) revert ONLY_ADMIN();
         sendBlockHashValue = _sendBlockHashValue;   
+    }
+
+    /// @notice   Rescue ETH
+    /// @param    _amount Amount to rescue
+    /// @param    _recipient recipient to send ETH
+    function rescueETH(uint256 _amount, address _recipient) external {
+        if (msg.sender != admin) revert ONLY_ADMIN();
+        if (address(this).balance > _amount) {
+            payable(_recipient).transfer(_amount);
+        }
     }
 
     receive() external payable {}
