@@ -3,11 +3,19 @@ pragma solidity 0.8.17;
 
 import {LibString} from "solady/utils/LibString.sol";
 import {IAxelarGateway} from "src/interfaces/IAxelarGateway.sol";
+import {IAxelarGasReceiverProxy} from "src/interfaces/IAxelarGasReceiverProxy.sol";
 
 contract EthereumStateSender {
     using LibString for address;
 
-    address public constant AXELAR_GATEWAY = 0x4F4495243837681061C4743b74B3eEdf548D56A5;
+    error ONLY_ADMIN();
+
+    address public constant AXELAR_GATEWAY = 0xe432150cce91c13a887f7D836923d5597adD8E31; // goerli (to change)
+    address public constant AXELAR_GAS_RECEIVER = 0xe432150cce91c13a887f7D836923d5597adD8E31; // goerli (to change)
+
+    address public admin;
+
+    uint256 public sendBlockHashValue = 300000000000000; // 0.0003 ETH
 
     mapping(uint256 => uint256) public blockNumbers;
     mapping(uint256 => bytes32) public blockHashes;
@@ -34,18 +42,28 @@ contract EthereumStateSender {
         uint256 currentPeriod = getCurrentPeriod();
 
         // Only one submission per period
-        if (blockNumbers[currentPeriod] == 0) {
-            blockHashes[currentPeriod] = blockhash(block.number);
-            blockNumbers[currentPeriod] = block.number;
+        if (blockNumbers[currentPeriod] == 0 && currentPeriod + 1 minutes < block.timestamp) {
+            blockHashes[currentPeriod] = blockhash(block.number - 1);
+            blockNumbers[currentPeriod] = block.number - 1;
         }
 
         if (destinationChains[currentPeriod][destinationChain] == 0) {
             string memory _destinationContract = destinationContract.toHexStringChecksumed();
-
+            bytes memory payload = abi.encode("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
+            if (address(this).balance > sendBlockHashValue) {
+                // pay gas in eth
+                IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{ value: sendBlockHashValue }(
+                    address(this), 
+                    destinationChain, 
+                    _destinationContract, 
+                    payload,
+                    msg.sender
+                );
+            }
             IAxelarGateway(AXELAR_GATEWAY).callContract(
                 destinationChain,
                 _destinationContract,
-                abi.encode("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod])
+                payload
             );
 
             destinationChains[currentPeriod][destinationChain] += 1;
@@ -107,7 +125,24 @@ contract EthereumStateSender {
         return (_user, _gauge, _time, _positions, block.number);
     }
 
+    /// @notice   Get current period (last thursday at midnight utc time)
     function getCurrentPeriod() public view returns (uint256) {
         return (block.timestamp / 1 weeks * 1 weeks);
     }
+
+    /// @notice   Set new admin (only the actual admin can call it)
+    /// @param    _admin New admin
+    function setAdmin(address _admin) external {
+        if (msg.sender != admin) revert ONLY_ADMIN();
+        admin = _admin;
+    }
+
+    /// @notice   Set a new blockhash value (only the actual admin can call it)
+    /// @param    _sendBlockHashValue New blockhash value to use
+    function setSendBlockhashValue(uint256 _sendBlockHashValue) external {
+        if (msg.sender != admin) revert ONLY_ADMIN();
+        sendBlockHashValue = _sendBlockHashValue;   
+    }
+
+    receive() external payable {}
 }
