@@ -5,15 +5,13 @@ import {LibString} from "solady/utils/LibString.sol";
 import {IAxelarGateway} from "src/interfaces/IAxelarGateway.sol";
 import {IAxelarGasReceiverProxy} from "src/interfaces/IAxelarGasReceiverProxy.sol";
 
-contract EthereumStateSender {
+contract EthereumStateSenderNoAdmin {
     using LibString for address;
 
     error ONLY_ADMIN();
 
     address public constant AXELAR_GATEWAY = 0xe432150cce91c13a887f7D836923d5597adD8E31; // goerli (to change)
     address public constant AXELAR_GAS_RECEIVER = 0xe432150cce91c13a887f7D836923d5597adD8E31; // goerli (to change)
-
-    address public admin = msg.sender;
 
     uint256 public sendBlockHashValue = 300000000000000; // 0.0003 ETH
 
@@ -37,7 +35,7 @@ contract EthereumStateSender {
     /// @param      destinationChain The destination chain
     /// @param      destinationContract The destination contract
     function sendBlockhash(string calldata destinationChain, address destinationContract)
-        public
+        public payable
     {
         uint256 currentPeriod = getCurrentPeriod();
 
@@ -52,12 +50,12 @@ contract EthereumStateSender {
             bytes memory payload = abi.encode("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
             if (address(this).balance > sendBlockHashValue) {
                 // pay gas in eth
-                IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{ value: sendBlockHashValue }(
-                    address(this), 
+                IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{ value: msg.value }(
+                    msg.sender, 
                     destinationChain, 
                     _destinationContract, 
                     payload,
-                    address(this)
+                    msg.sender
                 );
             }
             IAxelarGateway(AXELAR_GATEWAY).callContract(
@@ -128,30 +126,6 @@ contract EthereumStateSender {
     /// @notice   Get current period (last thursday at midnight utc time)
     function getCurrentPeriod() public view returns (uint256) {
         return (block.timestamp / 1 weeks * 1 weeks);
-    }
-
-    /// @notice   Set new admin (only the actual admin can call it)
-    /// @param    _admin New admin
-    function setAdmin(address _admin) external {
-        if (msg.sender != admin) revert ONLY_ADMIN();
-        admin = _admin;
-    }
-
-    /// @notice   Set a new blockhash value (only the actual admin can call it)
-    /// @param    _sendBlockHashValue New blockhash value to use
-    function setSendBlockhashValue(uint256 _sendBlockHashValue) external {
-        if (msg.sender != admin) revert ONLY_ADMIN();
-        sendBlockHashValue = _sendBlockHashValue;   
-    }
-
-    /// @notice   Rescue ETH
-    /// @param    _amount Amount to rescue
-    /// @param    _recipient recipient to send ETH
-    function rescueETH(uint256 _amount, address _recipient) external {
-        if (msg.sender != admin) revert ONLY_ADMIN();
-        if (address(this).balance > _amount) {
-            payable(_recipient).transfer(_amount);
-        }
     }
 
     receive() external payable {}
