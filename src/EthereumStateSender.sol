@@ -19,7 +19,7 @@ contract EthereumStateSender {
 
     mapping(uint256 => uint256) public blockNumbers;
     mapping(uint256 => bytes32) public blockHashes;
-    mapping(uint256 => mapping(string => uint256)) public destinationChains; 
+    mapping(uint256 => mapping(string => uint256)) public destinationChains;
 
     /// @notice Emitted when a recipient is set
     /// @param _sender The sender of the transaction
@@ -36,9 +36,7 @@ contract EthereumStateSender {
     /// @notice     Send a blockhash to a destination chain (it will use the current block's blockhash)
     /// @param      destinationChain The destination chain
     /// @param      destinationContract The destination contract
-    function sendBlockhash(string calldata destinationChain, address destinationContract)
-        public
-    {
+    function sendBlockhash(string calldata destinationChain, address destinationContract) public {
         uint256 currentPeriod = getCurrentPeriod();
 
         // Only one submission per period
@@ -49,22 +47,15 @@ contract EthereumStateSender {
 
         if (destinationChains[currentPeriod][destinationChain] == 0) {
             string memory _destinationContract = destinationContract.toHexStringChecksumed();
-            bytes memory payload = abi.encode("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
+            bytes memory payload =
+                abi.encode("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
             if (address(this).balance > sendBlockHashValue) {
                 // pay gas in eth
-                IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{ value: sendBlockHashValue }(
-                    address(this), 
-                    destinationChain, 
-                    _destinationContract, 
-                    payload,
-                    address(this)
+                IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: sendBlockHashValue}(
+                    address(this), destinationChain, _destinationContract, payload, address(this)
                 );
             }
-            IAxelarGateway(AXELAR_GATEWAY).callContract(
-                destinationChain,
-                _destinationContract,
-                payload
-            );
+            IAxelarGateway(AXELAR_GATEWAY).callContract(destinationChain, _destinationContract, payload);
 
             destinationChains[currentPeriod][destinationChain] += 1;
 
@@ -141,7 +132,7 @@ contract EthereumStateSender {
     /// @param    _sendBlockHashValue New blockhash value to use
     function setSendBlockhashValue(uint256 _sendBlockHashValue) external {
         if (msg.sender != admin) revert ONLY_ADMIN();
-        sendBlockHashValue = _sendBlockHashValue;   
+        sendBlockHashValue = _sendBlockHashValue;
     }
 
     /// @notice   Rescue ETH

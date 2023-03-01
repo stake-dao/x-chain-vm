@@ -46,9 +46,10 @@ pragma solidity 0.8.17;
              `a@@a%@'    `%a@@'       `a@@a%a@@a
  */
 
+import {ERC20} from "solmate/tokens/ERC20.sol";
+import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {ERC20, SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 
 import {ICurveGaugeControllerOracle} from "src/interfaces/ICurveGaugeControllerOracle.sol";
 
@@ -301,7 +302,7 @@ contract Platform is ReentrancyGuard {
         if (totalRewardAmount == 0 || maxRewardPerVote == 0) revert WRONG_INPUT();
 
         // Transfer the rewards to the contracts.
-        ERC20(rewardToken).safeTransferFrom(msg.sender, address(this), totalRewardAmount);
+        SafeTransferLib.safeTransferFrom(rewardToken, msg.sender, address(this), totalRewardAmount);
 
         unchecked {
             // Get the ID for that new Bribe and increment the nextID counter.
@@ -310,8 +311,7 @@ contract Platform is ReentrancyGuard {
             ++nextID;
         }
 
-        uint256 rewardPerPeriod = totalRewardAmount.mulDivDown(1, numberOfPeriods);
-
+        uint256 rewardPerPeriod = totalRewardAmount.mulDiv(1, numberOfPeriods);
         uint256 currentPeriod = getCurrentPeriod();
 
         bribes[newBribeID] = Bribe({
@@ -335,7 +335,7 @@ contract Platform is ReentrancyGuard {
             rewardPerPeriod,
             totalRewardAmount,
             upgradeable
-            );
+        );
 
         // Set Upgradeable status.
         isUpgradeable[newBribeID] = upgradeable;
@@ -396,14 +396,14 @@ contract Platform is ReentrancyGuard {
 
         Bribe storage bribe = bribes[bribeId];
 
-        ICurveGaugeControllerOracle.VotedSlope memory votedSlope;
+        ICurveGaugeControllerOracle.VotedSlope memory userSlope;
         uint256 lastVote;
 
         if (curveGaugeControllerOracle.isUserUpdated(snapshotBlock, proofData.user, bribe.gauge)) {
-            votedSlope = curveGaugeControllerOracle.voteUserSlope(snapshotBlock, proofData.user, bribe.gauge);
+            userSlope = curveGaugeControllerOracle.voteUserSlope(snapshotBlock, proofData.user, bribe.gauge);
             lastVote = curveGaugeControllerOracle.lastUserVote(snapshotBlock, proofData.user, bribe.gauge);
         } else {
-            (, votedSlope, lastVote,) = curveGaugeControllerOracle.extractProofState(
+            (, userSlope, lastVote,) = curveGaugeControllerOracle.extractProofState(
                 proofData.user, bribe.gauge, proofData.headerRlp, proofData.userProofRlp
             );
         }
@@ -412,8 +412,8 @@ contract Platform is ReentrancyGuard {
         uint256 endTimestamp = bribe.endTimestamp;
 
         if (
-            votedSlope.slope == 0 || lastUserClaim[proofData.user][bribeId] >= currentPeriod
-                || currentPeriod >= votedSlope.end || currentPeriod <= lastVote || currentPeriod >= endTimestamp
+            userSlope.slope == 0 || lastUserClaim[proofData.user][bribeId] >= currentPeriod
+                || currentPeriod >= userSlope.end || currentPeriod <= lastVote || currentPeriod >= endTimestamp
                 || currentPeriod != getCurrentPeriod()
         ) return 0;
 
@@ -422,13 +422,13 @@ contract Platform is ReentrancyGuard {
 
         // Voting Power = userSlope * dt
         // with dt = lock_end - period.
-        uint256 _bias = _getAddrBias(votedSlope.slope, votedSlope.end, currentPeriod);
+        uint256 _bias = _getAddrBias(userSlope.slope, userSlope.end, currentPeriod);
         // Compute the reward amount based on
         // Reward / Total Votes.
-        amount = _bias.mulWadDown(rewardPerVote[bribeId]);
+        amount = _bias.mulWad(rewardPerVote[bribeId]);
         // Compute the reward amount based on
         // the max price to pay.
-        uint256 _amountWithMaxPrice = _bias.mulWadDown(bribe.maxRewardPerVote);
+        uint256 _amountWithMaxPrice = _bias.mulWad(bribe.maxRewardPerVote);
         // Distribute the _min between the amount based on votes, and price.
         amount = _min(amount, _amountWithMaxPrice);
 
@@ -438,11 +438,11 @@ contract Platform is ReentrancyGuard {
         uint256 feeAmount;
 
         if (platformFee != 0) {
-            feeAmount = amount.mulWadDown(platformFee);
+            feeAmount = amount.mulWad(platformFee);
             amount -= feeAmount;
 
             // Transfer fees.
-            ERC20(bribe.rewardToken).safeTransfer(feeRecipient, feeAmount);
+            SafeTransferLib.safeTransfer(bribe.rewardToken, feeRecipient, feeAmount);
         }
 
         address receiver = curveGaugeControllerOracle.recipient(proofData.user);
@@ -450,7 +450,7 @@ contract Platform is ReentrancyGuard {
         receiver = receiver != address(0) ? receiver : proofData.user;
 
         //Transfer to user
-        ERC20(bribe.rewardToken).safeTransfer(receiver, amount);
+        SafeTransferLib.safeTransfer(bribe.rewardToken, receiver, amount);
 
         emit Claimed(proofData.user, bribe.rewardToken, bribeId, amount, feeAmount, currentPeriod);
     }
@@ -464,6 +464,9 @@ contract Platform is ReentrancyGuard {
         uint256 currentPeriod = getCurrentPeriod();
 
         if (_activePeriod.id == 0 && currentPeriod == _activePeriod.timestamp) {
+            // Check if there is an upgrade in queue and update the bribe.
+            _checkForUpgrade(bribeId);
+
             // Initialize reward per token.
             // Only for the first period, and if not already initialized.
             _updateRewardPerToken(bribeId, proofData, currentPeriod);
@@ -471,6 +474,9 @@ contract Platform is ReentrancyGuard {
 
         // Increase Period
         if (block.timestamp >= _activePeriod.timestamp + _WEEK) {
+            // Check if there is an upgrade in queue and update the bribe.
+            _checkForUpgrade(bribeId);
+
             // Checkpoint gauge to have up to date gauge weight.
             // Roll to next period.
             _rollOverToNextPeriod(bribeId, currentPeriod, proofData);
@@ -481,29 +487,36 @@ contract Platform is ReentrancyGuard {
         return _activePeriod.timestamp;
     }
 
-    /// @notice Roll over to next period.
-    /// @param bribeId Bribe ID.
-    /// @param currentPeriod Next period timestamp.
-    function _rollOverToNextPeriod(uint256 bribeId, uint256 currentPeriod, ProofData memory proofData) internal {
-        uint8 index = getActivePeriodPerBribe(bribeId);
-
+    /// @notice Checks for an upgrade and update the bribe.
+    function _checkForUpgrade(uint256 bribeId) internal {
         Upgrade storage upgradedBribe = upgradeBribeQueue[bribeId];
 
         // Check if there is an upgrade in queue.
-        if (upgradedBribe.numberOfPeriods != 0) {
+        if (upgradedBribe.totalRewardAmount != 0) {
             // Save new values.
             bribes[bribeId].numberOfPeriods = upgradedBribe.numberOfPeriods;
             bribes[bribeId].totalRewardAmount = upgradedBribe.totalRewardAmount;
             bribes[bribeId].maxRewardPerVote = upgradedBribe.maxRewardPerVote;
             bribes[bribeId].endTimestamp = upgradedBribe.endTimestamp;
 
+            if (upgradedBribe.blacklist.length > 0) {
+                bribes[bribeId].blacklist = upgradedBribe.blacklist;
+            }
+
             emit BribeDurationIncreased(
                 bribeId, upgradedBribe.numberOfPeriods, upgradedBribe.totalRewardAmount, upgradedBribe.maxRewardPerVote
-                );
+            );
 
             // Reset the next values.
             delete upgradeBribeQueue[bribeId];
         }
+    }
+
+    /// @notice Roll over to next period.
+    /// @param bribeId Bribe ID.
+    /// @param currentPeriod Next period timestamp.
+    function _rollOverToNextPeriod(uint256 bribeId, uint256 currentPeriod, ProofData memory proofData) internal {
+        uint8 index = getActivePeriodPerBribe(bribeId);
 
         Bribe storage bribe = bribes[bribeId];
 
@@ -513,13 +526,13 @@ contract Platform is ReentrancyGuard {
         rewardPerPeriod = bribe.totalRewardAmount - amountClaimed[bribeId];
 
         if (bribe.endTimestamp > currentPeriod + _WEEK && periodsLeft > 1) {
-            rewardPerPeriod = rewardPerPeriod.mulDivDown(1, periodsLeft);
+            rewardPerPeriod = rewardPerPeriod.mulDiv(1, periodsLeft);
         }
 
         // Get adjusted slope without blacklisted addresses.
         uint256 gaugeBias = _getAdjustedBias(bribe.gauge, bribe.blacklist, currentPeriod, proofData);
 
-        rewardPerVote[bribeId] = rewardPerPeriod.mulDivDown(_BASE_UNIT, gaugeBias);
+        rewardPerVote[bribeId] = rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
         activePeriod[bribeId] = Period(index, currentPeriod, rewardPerPeriod);
 
         emit PeriodRolledOver(bribeId, index, currentPeriod, rewardPerPeriod);
@@ -531,7 +544,7 @@ contract Platform is ReentrancyGuard {
         if (rewardPerVote[bribeId] == 0) {
             uint256 gaugeBias =
                 _getAdjustedBias(bribes[bribeId].gauge, bribes[bribeId].blacklist, currentPeriod, proofData);
-            rewardPerVote[bribeId] = activePeriod[bribeId].rewardPerPeriod.mulDivDown(_BASE_UNIT, gaugeBias);
+            rewardPerVote[bribeId] = activePeriod[bribeId].rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
         }
     }
 
@@ -618,7 +631,7 @@ contract Platform is ReentrancyGuard {
         Bribe storage bribe = bribes[_bribeId];
         Upgrade memory upgradedBribe = upgradeBribeQueue[_bribeId];
 
-        ERC20(bribe.rewardToken).safeTransferFrom(msg.sender, address(this), _increasedAmount);
+        SafeTransferLib.safeTransferFrom(bribe.rewardToken, msg.sender, address(this), _increasedAmount);
 
         if (upgradedBribe.totalRewardAmount != 0) {
             upgradedBribe = Upgrade({
@@ -642,7 +655,7 @@ contract Platform is ReentrancyGuard {
 
         emit BribeDurationIncreaseQueued(
             _bribeId, upgradedBribe.numberOfPeriods, upgradedBribe.totalRewardAmount, _newMaxPricePerVote
-            );
+        );
     }
 
     /// @notice Close Bribe if there is remaining.
@@ -653,9 +666,16 @@ contract Platform is ReentrancyGuard {
         Bribe storage bribe = bribes[bribeId];
 
         if (getCurrentPeriod() >= bribe.endTimestamp || isKilled) {
-            uint256 leftOver = bribes[bribeId].totalRewardAmount - amountClaimed[bribeId];
+            uint256 leftOver;
+            Upgrade memory upgradedBribe = upgradeBribeQueue[bribeId];
+            if (upgradedBribe.totalRewardAmount != 0) {
+                leftOver = upgradedBribe.totalRewardAmount - amountClaimed[bribeId];
+                delete upgradeBribeQueue[bribeId];
+            } else {
+                leftOver = bribes[bribeId].totalRewardAmount - amountClaimed[bribeId];
+            }
             // Transfer the left over to the owner.
-            ERC20(bribe.rewardToken).safeTransfer(bribe.manager, leftOver);
+            SafeTransferLib.safeTransfer(bribe.rewardToken, bribe.manager, leftOver);
             delete bribes[bribeId].manager;
 
             emit BribeClosed(bribeId, leftOver);
