@@ -56,7 +56,7 @@ contract PlatformXChainTest is Utils {
         axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), address(oracle));
         oracle.setAxelarExecutable(address(axelarExecutable));
 
-        platform = new Platform(address(oracle));
+        platform = new Platform(address(oracle), address(this), address(this));
 
         rewardToken.mint(address(this), _amount);
         rewardToken.approve(address(platform), _amount);
@@ -88,7 +88,7 @@ contract PlatformXChainTest is Utils {
     function testWhitelistWrongAuth() public {
         // Random User
         vm.prank(address(0x1));
-        vm.expectRevert(Platform.NOT_GOVERNANCE.selector);
+        vm.expectRevert("UNAUTHORIZED");
         platform.whitelistAddress(_user, true);
 
         assertFalse(platform.whitelisted(_user));
@@ -260,8 +260,12 @@ contract PlatformXChainTest is Utils {
             blackListedProofsRlp: new bytes[](0)
         });
 
+        uint256 claimable = platform.claimable(_id, _proofData);
         uint256 claimed = platform.claim(_id, _proofData);
+
         assertGt(claimed, 0);
+        assertGt(claimable, 0);
+        assertApproxEqRel(claimed, claimable, 1e15);
 
         assertEq(rewardToken.balanceOf(_user), 0);
         assertEq(rewardToken.balanceOf(FAKE_RECIPIENT), claimed);
@@ -269,7 +273,10 @@ contract PlatformXChainTest is Utils {
         assertGt(platform.rewardPerVote(_id), 0);
 
         claimed = platform.claim(_id, _proofData);
+        claimable = platform.claimable(_id, _proofData);
+
         assertEq(claimed, 0);
+        assertEq(claimable, 0);
     }
 
     function testClaimBribe() public {
@@ -299,12 +306,19 @@ contract PlatformXChainTest is Utils {
             blackListedProofsRlp: new bytes[](0)
         });
 
+        uint256 claimable = platform.claimable(_id, _proofData);
         uint256 claimed = platform.claim(_id, _proofData);
 
         assertGt(claimed, 0);
+        assertGt(claimable, 0);
+        assertApproxEqRel(claimed, claimable, 1e15);
+
         assertGt(platform.rewardPerVote(_id), 0);
 
+        claimable = platform.claimable(_id, _proofData);
         claimed = platform.claim(_id, _proofData);
+
+        assertEq(claimable, 0);
         assertEq(claimed, 0);
     }
 

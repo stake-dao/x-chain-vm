@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-interface ICurveGaugeControllerOracle {
+interface IGaugeControllerOracle {
     struct Point {
         uint256 bias;
         uint256 slope;

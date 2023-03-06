@@ -27,7 +27,7 @@ contract DeploySideChains is Script {
         axelarExecutable = new AxelarExecutable(_AXELAR_GATEWAY, ETH_STATE_SENDER, address(oracle));
         oracle.setAxelarExecutable(address(axelarExecutable));
 
-        platform = new Platform(address(oracle));
+        platform = new Platform(address(oracle), DEPLOYER, DEPLOYER);
 
         vm.stopBroadcast();
     }
