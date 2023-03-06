@@ -62,9 +62,6 @@ contract CurveGaugeControllerOracle is Owned {
     /// @notice Mapping of Gauge => Block Number => Point Weight Struct.
     mapping(address => mapping(uint256 => Point)) public pointWeights;
 
-    /// @notice Mapping of Gauge => Block Number => Adjusted Bias.
-    mapping(address => mapping(uint256 => uint256)) public adjustedBias;
-
     /// @notice Mapping of Block Number => Address => Gauge => isUpdated for the specific block number.
     mapping(uint256 => mapping(address => mapping(address => bool))) public isUserUpdated;
 
