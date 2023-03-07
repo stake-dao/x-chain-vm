@@ -55,6 +55,7 @@ contract EthereumStateSenderNew {
     /// @param      _destinationChain The destination chain
     /// @param      _destinationContract The destination contract
     function sendBlockhash(string calldata _destinationChain, address _destinationContract) public payable {
+        if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
         uint256 currentPeriod = getCurrentPeriod();
 
         // Only one submission per period
@@ -73,6 +74,7 @@ contract EthereumStateSenderNew {
     /// @param      _destinationContracts The destination contracts array
     function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts) external payable {
         uint256 lenght = _destinationChains.length;
+        if (msg.value < sendBlockHashMinValue * lenght) revert VALUE_TOO_LOW();
         for (uint256 i; i < lenght;) {
             sendBlockhash(_destinationChains[i], _destinationContracts[i]);
             unchecked {
@@ -86,6 +88,7 @@ contract EthereumStateSenderNew {
     /// @param      _destinationContract The destination contract
     function sendBlockhashEmergency(string calldata _destinationChain, address _destinationContract) external payable {
         if(msg.sender != admin) revert ONLY_ADMIN();
+        if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
         uint256 currentPeriod = getCurrentPeriod();
         _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
     }
@@ -95,7 +98,6 @@ contract EthereumStateSenderNew {
     /// @param      destinationContract The destination contract
     /// @param      currentPeriod Current period
     function _sendBlockhash(address destinationContract, string calldata destinationChain, uint256 currentPeriod) internal {
-        if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
         bytes memory payload =
             abi.encodeWithSignature("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
