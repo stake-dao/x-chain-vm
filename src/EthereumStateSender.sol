@@ -48,7 +48,7 @@ contract EthereumStateSender {
         if (destinationChains[currentPeriod][destinationChain] == 0) {
             string memory _destinationContract = destinationContract.toHexStringChecksumed();
             bytes memory payload =
-                abi.encode("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
+                abi.encodeWithSignature("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
             if (address(this).balance > sendBlockHashValue) {
                 // pay gas in eth
                 IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: sendBlockHashValue}(
@@ -84,7 +84,7 @@ contract EthereumStateSender {
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
 
         IAxelarGateway(AXELAR_GATEWAY).callContract(
-            destinationChain, _destinationContract, abi.encode("setRecipient(address,address)", msg.sender, _recipient)
+            destinationChain, _destinationContract, abi.encodeWithSignature("setRecipient(address,address)", msg.sender, _recipient)
         );
 
         emit RecipientSet(msg.sender, _recipient, destinationChain);
