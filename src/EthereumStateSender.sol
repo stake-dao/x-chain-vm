@@ -9,13 +9,15 @@ contract EthereumStateSender {
     using LibString for address;
 
     error ONLY_ADMIN();
+    error VALUE_TOO_LOW();
+
+    address public admin;
 
     address public constant AXELAR_GATEWAY = 0xe432150cce91c13a887f7D836923d5597adD8E31; // goerli (to change)
-    address public constant AXELAR_GAS_RECEIVER = 0xe432150cce91c13a887f7D836923d5597adD8E31; // goerli (to change)
+    address public constant AXELAR_GAS_RECEIVER = 0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6; // goerli (to change)
 
-    address public admin = msg.sender;
-
-    uint256 public sendBlockHashValue = 300000000000000; // 0.0003 ETH
+    uint256 public sendBlockHashMinValue = 1000000000000000; // 0.001 ETH
+    uint256 public setRecipientMinValue = 400000000000000; // 0.0004 ETH
 
     mapping(uint256 => uint256) public blockNumbers;
     mapping(uint256 => bytes32) public blockHashes;
@@ -33,41 +35,46 @@ contract EthereumStateSender {
     /// @param _destinationChain The destination chain
     event BlockhashSent(uint256 indexed _blockNumber, bytes32 _blockHash, string _destinationChain);
 
+    /// @notice Emitted when a new admin is set
+    /// @param _admin The admin address
+    event AdminSet(address _admin);
+
+    /// @notice Emitted when a new sendBlockHashMinValue is set
+    /// @param _minValue The min eth value to pass on the call 
+    event SendBlockhashMinValueSet(uint256 _minValue);
+
+    /// @notice Emitted when a new setRecipientMinValue is set
+    /// @param _minValue The min eth value to pass on the call 
+    event SetRecipientMinValueSet(uint256 _minValue);
+
+    constructor(address _admin) {
+        admin = _admin;
+    }
+
     /// @notice     Send a blockhash to a destination chain (it will use the current block's blockhash)
-    /// @param      destinationChain The destination chain
-    /// @param      destinationContract The destination contract
-    function sendBlockhash(string calldata destinationChain, address destinationContract) public {
+    /// @param      _destinationChain The destination chain
+    /// @param      _destinationContract The destination contract
+    function sendBlockhash(string calldata _destinationChain, address _destinationContract) public payable {
+        if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
         uint256 currentPeriod = getCurrentPeriod();
 
         // Only one submission per period
-        if (blockNumbers[currentPeriod] == 0 && currentPeriod + 1 minutes < block.timestamp) {
+        if (blockNumbers[currentPeriod] == 0 && currentPeriod + 5 minutes < block.timestamp) {
             blockHashes[currentPeriod] = blockhash(block.number - 1);
             blockNumbers[currentPeriod] = block.number - 1;
         }
 
-        if (destinationChains[currentPeriod][destinationChain] == 0) {
-            string memory _destinationContract = destinationContract.toHexStringChecksumed();
-            bytes memory payload =
-                abi.encodeWithSignature("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
-            if (address(this).balance > sendBlockHashValue) {
-                // pay gas in eth
-                IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: sendBlockHashValue}(
-                    address(this), destinationChain, _destinationContract, payload, address(this)
-                );
-            }
-            IAxelarGateway(AXELAR_GATEWAY).callContract(destinationChain, _destinationContract, payload);
-
-            destinationChains[currentPeriod][destinationChain] += 1;
-
-            emit BlockhashSent(blockNumbers[currentPeriod], blockHashes[currentPeriod], destinationChain);
+        if (destinationChains[currentPeriod][_destinationChain] == 0) {
+            _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
         }
     }
 
-    /// @notice     Send a blockhash to a a list of destination chains (it will use the current block's blockhash)
+    /// @notice     Send a blockhash to a list of destination chains (it will use the current block's blockhash)
     /// @param      _destinationChains The destination chains array
     /// @param      _destinationContracts The destination contracts array
-    function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts) external {
+    function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts) external payable {
         uint256 lenght = _destinationChains.length;
+        if (msg.value < sendBlockHashMinValue * lenght) revert VALUE_TOO_LOW();
         for (uint256 i; i < lenght;) {
             sendBlockhash(_destinationChains[i], _destinationContracts[i]);
             unchecked {
@@ -76,18 +83,77 @@ contract EthereumStateSender {
         }
     }
 
+    /// @notice     Send a blockhash to a destination chain, function used only in emergency cases
+    /// @param      _destinationChain The destination chain 
+    /// @param      _destinationContract The destination contract
+    function sendBlockhashEmergency(string calldata _destinationChain, address _destinationContract) external payable {
+        if(msg.sender != admin) revert ONLY_ADMIN();
+        if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
+        uint256 currentPeriod = getCurrentPeriod();
+        _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
+    }
+
+    /// @notice     Internal function to send a blockhash to a destination chain
+    /// @param      destinationChain The destination chain 
+    /// @param      destinationContract The destination contract
+    /// @param      currentPeriod Current period
+    function _sendBlockhash(address destinationContract, string calldata destinationChain, uint256 currentPeriod) internal {
+        string memory _destinationContract = destinationContract.toHexStringChecksumed();
+        bytes memory payload =
+            abi.encodeWithSignature("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
+        // pay gas in eth
+        // the gas in exceed will be reimbursed to the msg.sender
+        IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
+            msg.sender, destinationChain, _destinationContract, payload, msg.sender
+        );
+
+        IAxelarGateway(AXELAR_GATEWAY).callContract(destinationChain, _destinationContract, payload);
+
+        destinationChains[currentPeriod][destinationChain] += 1;
+
+        emit BlockhashSent(blockNumbers[currentPeriod], blockHashes[currentPeriod], destinationChain);
+    }
+
     /// @notice    Set a recipient for a destination chain
     /// @param     destinationChain The destination chain
     /// @param     destinationContract The destination contract
-    /// @param     _recipient The recipient
-    function setRecipient(string calldata destinationChain, address destinationContract, address _recipient) external {
+    /// @param     recipient The recipient
+    function setRecipient(string calldata destinationChain, address destinationContract, address recipient) external payable {
+        if (msg.value < setRecipientMinValue) revert VALUE_TOO_LOW();
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
+        bytes memory payload =
+                abi.encodeWithSignature("setRecipient(address,address)", msg.sender, recipient);
+
+        IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
+                msg.sender, destinationChain, _destinationContract, payload, msg.sender
+            );
 
         IAxelarGateway(AXELAR_GATEWAY).callContract(
-            destinationChain, _destinationContract, abi.encodeWithSignature("setRecipient(address,address)", msg.sender, _recipient)
+            destinationChain, _destinationContract, payload
         );
 
-        emit RecipientSet(msg.sender, _recipient, destinationChain);
+        emit RecipientSet(msg.sender, recipient, destinationChain);
+    }
+
+    /// @notice    Set min value (ETH) to send during the sendBlockhash() call
+    /// @param     minValue min value to set
+    function setSendBlockHashMinValue(uint256 minValue) external {
+        if (msg.sender != admin) revert ONLY_ADMIN();
+        sendBlockHashMinValue = minValue;
+    }
+
+    /// @notice    Set min value (ETH) to send during the setRecipient() call
+    /// @param     minValue min value to set
+    function setSetRecipientMinValue(uint256 minValue) external {
+        if (msg.sender != admin) revert ONLY_ADMIN();
+        setRecipientMinValue = minValue;
+    }
+
+    /// @notice    Set a new admin
+    /// @param     _admin admin address
+    function setAdmin(address _admin) external {
+        if (msg.sender != admin) revert ONLY_ADMIN();
+        admin = _admin;
     }
 
     /// @notice   Generate proof parameters for a given user, gauge and time
@@ -119,30 +185,6 @@ contract EthereumStateSender {
     /// @notice   Get current period (last thursday at midnight utc time)
     function getCurrentPeriod() public view returns (uint256) {
         return (block.timestamp / 1 weeks * 1 weeks);
-    }
-
-    /// @notice   Set new admin (only the actual admin can call it)
-    /// @param    _admin New admin
-    function setAdmin(address _admin) external {
-        if (msg.sender != admin) revert ONLY_ADMIN();
-        admin = _admin;
-    }
-
-    /// @notice   Set a new blockhash value (only the actual admin can call it)
-    /// @param    _sendBlockHashValue New blockhash value to use
-    function setSendBlockhashValue(uint256 _sendBlockHashValue) external {
-        if (msg.sender != admin) revert ONLY_ADMIN();
-        sendBlockHashValue = _sendBlockHashValue;
-    }
-
-    /// @notice   Rescue ETH
-    /// @param    _amount Amount to rescue
-    /// @param    _recipient recipient to send ETH
-    function rescueETH(uint256 _amount, address _recipient) external {
-        if (msg.sender != admin) revert ONLY_ADMIN();
-        if (address(this).balance > _amount) {
-            payable(_recipient).transfer(_amount);
-        }
     }
 
     receive() external payable {}

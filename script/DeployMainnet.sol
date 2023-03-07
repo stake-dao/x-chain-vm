@@ -13,7 +13,7 @@ contract DeploySideChains is Script {
     function run() public {
         vm.startBroadcast(DEPLOYER);
 
-        sender = new EthereumStateSender();
+        sender = new EthereumStateSender(DEPLOYER);
 
         vm.stopBroadcast();
     }

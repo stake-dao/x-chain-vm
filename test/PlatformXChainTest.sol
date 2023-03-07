@@ -35,6 +35,7 @@ contract PlatformXChainTest is Utils {
     address internal constant _user = 0x52f541764E6e90eeBc5c21Ff570De0e2D63766B6;
     address internal constant _gauge = 0x1cEBdB0856dd985fAe9b8fEa2262469360B8a3a6;
     address internal constant _blacklisted = 0x425d16B0e08a28A3Ff9e4404AE99D78C0a076C5A;
+    address internal constant _deployer = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;
 
     AxelarGateway internal _gateway;
 
@@ -50,7 +51,7 @@ contract PlatformXChainTest is Utils {
         _gateway = new AxelarGateway();
         rewardToken = new MockERC20("Token", "TKO", 18);
 
-        sender = new EthereumStateSender();
+        sender = new EthereumStateSender(_deployer);
 
         oracle = new CurveGaugeControllerOracle(address(axelarExecutable));
         axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), address(oracle));

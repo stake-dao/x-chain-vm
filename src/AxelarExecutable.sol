@@ -15,21 +15,22 @@ contract AxelarExecutable is IAxelarExecutable, Owned {
     error WRONG_SOURCE_ADDRESS();
 
     /// @notice Curve Gauge Controller Oracle.
-    address public immutable ORACLE;
+    address public oracle;
 
     /// @notice Ethereum State Sender
-    address public immutable ETH_STATE_SENDER;
+    address public ess;
+    string public strEss;
 
-    // Not supported yet for immutable string.
-    string public STR_ETH_STATE_SENDER;
+    event OracleSet(address oracle);
+    event EssSet(address ess);
 
     constructor(address _axelarGateway, address _sourceAddress, address _oracle)
         IAxelarExecutable(_axelarGateway)
         Owned(msg.sender)
     {
-        ORACLE = _oracle;
-        ETH_STATE_SENDER = _sourceAddress;
-        STR_ETH_STATE_SENDER = _sourceAddress.toHexStringChecksumed();
+        oracle = _oracle;
+        ess = _sourceAddress;
+        strEss = _sourceAddress.toHexStringChecksumed();
     }
 
     function _execute(string memory sourceChain, string memory sourceAddress, bytes calldata payload)
@@ -37,9 +38,24 @@ contract AxelarExecutable is IAxelarExecutable, Owned {
         override
     {
         if (!sourceChain.eq("Ethereum")) revert WRONG_SOURCE_CHAIN();
-        if (!sourceAddress.eq(STR_ETH_STATE_SENDER)) revert WRONG_SOURCE_ADDRESS();
+        if (!sourceAddress.eq(strEss)) revert WRONG_SOURCE_ADDRESS();
 
-        (bool success,) = ORACLE.call(payload);
+        (bool success,) = oracle.call(payload);
         if (!success) revert CALL_FAILED();
+    }
+
+    /// @notice Set a new oracle
+    /// @param _oracle oracle address
+    function setOracle(address _oracle) external onlyOwner() {
+        oracle = _oracle;
+        emit OracleSet(oracle);
+    }
+
+    /// @notice Set a new ethereum state sender
+    /// @param _ess ess address
+    function setEthStateSender(address _ess) external onlyOwner() {
+        ess = _ess;
+        strEss = _ess.toHexStringChecksumed();
+        emit EssSet(ess);
     }
 }
