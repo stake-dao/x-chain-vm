@@ -9,6 +9,7 @@ contract EthereumStateSenderNew {
     using LibString for address;
 
     error ONLY_ADMIN();
+    error VALUE_TOO_LOW();
 
     address public admin;
 
@@ -70,7 +71,7 @@ contract EthereumStateSenderNew {
     /// @notice     Send a blockhash to a list of destination chains (it will use the current block's blockhash)
     /// @param      _destinationChains The destination chains array
     /// @param      _destinationContracts The destination contracts array
-    function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts) external {
+    function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts) external payable {
         uint256 lenght = _destinationChains.length;
         for (uint256 i; i < lenght;) {
             sendBlockhash(_destinationChains[i], _destinationContracts[i]);
@@ -83,7 +84,7 @@ contract EthereumStateSenderNew {
     /// @notice     Send a blockhash to a destination chain, function used only in emergency cases
     /// @param      _destinationChain The destination chain 
     /// @param      _destinationContract The destination contract
-    function sendBlockhashEmergency(string calldata _destinationChain, address _destinationContract) external {
+    function sendBlockhashEmergency(string calldata _destinationChain, address _destinationContract) external payable {
         if(msg.sender != admin) revert ONLY_ADMIN();
         uint256 currentPeriod = getCurrentPeriod();
         _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
@@ -94,6 +95,7 @@ contract EthereumStateSenderNew {
     /// @param      destinationContract The destination contract
     /// @param      currentPeriod Current period
     function _sendBlockhash(address destinationContract, string calldata destinationChain, uint256 currentPeriod) internal {
+        if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
         bytes memory payload =
             abi.encodeWithSignature("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
@@ -115,6 +117,7 @@ contract EthereumStateSenderNew {
     /// @param     destinationContract The destination contract
     /// @param     recipient The recipient
     function setRecipient(string calldata destinationChain, address destinationContract, address recipient) external payable {
+        if (msg.value < setRecipientMinValue) revert VALUE_TOO_LOW();
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
         bytes memory payload =
                 abi.encodeWithSignature("setRecipient(address,address)", msg.sender, recipient);
