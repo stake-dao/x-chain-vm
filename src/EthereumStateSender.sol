@@ -104,7 +104,7 @@ contract EthereumStateSender {
         // pay gas in eth
         // the gas in exceed will be reimbursed to the msg.sender
         IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
-            msg.sender, destinationChain, _destinationContract, payload, msg.sender
+            address(this), destinationChain, _destinationContract, payload, msg.sender
         );
 
         IAxelarGateway(AXELAR_GATEWAY).callContract(destinationChain, _destinationContract, payload);
@@ -125,7 +125,7 @@ contract EthereumStateSender {
                 abi.encodeWithSignature("setRecipient(address,address)", msg.sender, recipient);
 
         IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
-                msg.sender, destinationChain, _destinationContract, payload, msg.sender
+                address(this), destinationChain, _destinationContract, payload, msg.sender
             );
 
         IAxelarGateway(AXELAR_GATEWAY).callContract(
