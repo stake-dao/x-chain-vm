@@ -15,9 +15,10 @@ contract ProofExtractorTest is Utils {
     address internal constant _gauge = 0xd8b712d29381748dB89c36BCa0138d7c75866ddF;
     // Gauge Controller
     address internal constant _gaugeController = 0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB;
+    address internal constant _deployer = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;
 
     function setUp() public {
-        sender = new EthereumStateSender();
+        sender = new EthereumStateSender(_deployer);
         oracle = new CurveGaugeControllerOracle(address(0));
     }
 

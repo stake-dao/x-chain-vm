@@ -3,23 +3,25 @@ pragma solidity 0.8.17;
 
 import {LibString} from "solady/utils/LibString.sol";
 import {IAxelarGateway} from "src/interfaces/IAxelarGateway.sol";
+import {IAxelarGasReceiverProxy} from "src/interfaces/IAxelarGasReceiverProxy.sol";
 
 contract EthereumStateSender {
     using LibString for address;
 
-    address public constant AXELAR_GATEWAY = 0x4F4495243837681061C4743b74B3eEdf548D56A5;
+    error ONLY_ADMIN();
+    error VALUE_TOO_LOW();
 
-    uint256 public lastBlockNumber;
+    address public admin;
 
-    error TO_NEW();
-    error TOO_OLD();
-    error WRONG_INPUT();
-    error UNBOUND_TIMESTAMP();
-    error WRONG_INPUT_FUTURE_BLOCK();
+    address public constant AXELAR_GATEWAY = 0xe432150cce91c13a887f7D836923d5597adD8E31; // goerli (to change)
+    address public constant AXELAR_GAS_RECEIVER = 0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6; // goerli (to change)
 
-    constructor() {
-        lastBlockNumber = block.number;
-    }
+    uint256 public sendBlockHashMinValue = 1000000000000000; // 0.001 ETH
+    uint256 public setRecipientMinValue = 400000000000000; // 0.0004 ETH
+
+    mapping(uint256 => uint256) public blockNumbers;
+    mapping(uint256 => bytes32) public blockHashes;
+    mapping(uint256 => mapping(string => uint256)) public destinationChains;
 
     /// @notice Emitted when a recipient is set
     /// @param _sender The sender of the transaction
@@ -33,49 +35,125 @@ contract EthereumStateSender {
     /// @param _destinationChain The destination chain
     event BlockhashSent(uint256 indexed _blockNumber, bytes32 _blockHash, string _destinationChain);
 
-    /// @notice     Send a blockhash to a destination chain
-    /// @param      destinationChain The destination chain
+    /// @notice Emitted when a new admin is set
+    /// @param _admin The admin address
+    event AdminSet(address _admin);
+
+    /// @notice Emitted when a new sendBlockHashMinValue is set
+    /// @param _minValue The min eth value to pass on the call 
+    event SendBlockhashMinValueSet(uint256 _minValue);
+
+    /// @notice Emitted when a new setRecipientMinValue is set
+    /// @param _minValue The min eth value to pass on the call 
+    event SetRecipientMinValueSet(uint256 _minValue);
+
+    constructor(address _admin) {
+        admin = _admin;
+    }
+
+    /// @notice     Send a blockhash to a destination chain (it will use the current block's blockhash)
+    /// @param      _destinationChain The destination chain
+    /// @param      _destinationContract The destination contract
+    function sendBlockhash(string calldata _destinationChain, address _destinationContract) public payable {
+        if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
+        uint256 currentPeriod = getCurrentPeriod();
+
+        // Only one submission per period
+        if (blockNumbers[currentPeriod] == 0 && currentPeriod + 5 minutes < block.timestamp) {
+            blockHashes[currentPeriod] = blockhash(block.number - 1);
+            blockNumbers[currentPeriod] = block.number - 1;
+        }
+
+        if (destinationChains[currentPeriod][_destinationChain] == 0) {
+            _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
+        }
+    }
+
+    /// @notice     Send a blockhash to a list of destination chains (it will use the current block's blockhash)
+    /// @param      _destinationChains The destination chains array
+    /// @param      _destinationContracts The destination contracts array
+    function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts) external payable {
+        uint256 lenght = _destinationChains.length;
+        if (msg.value < sendBlockHashMinValue * lenght) revert VALUE_TOO_LOW();
+        for (uint256 i; i < lenght;) {
+            sendBlockhash(_destinationChains[i], _destinationContracts[i]);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @notice     Send a blockhash to a destination chain, function used only in emergency cases
+    /// @param      _destinationChain The destination chain 
+    /// @param      _destinationContract The destination contract
+    function sendBlockhashEmergency(string calldata _destinationChain, address _destinationContract) external payable {
+        if(msg.sender != admin) revert ONLY_ADMIN();
+        if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
+        uint256 currentPeriod = getCurrentPeriod();
+        _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
+    }
+
+    /// @notice     Internal function to send a blockhash to a destination chain
+    /// @param      destinationChain The destination chain 
     /// @param      destinationContract The destination contract
-    /// @param      _blockNumber The block number
-    function sendBlockhash(string calldata destinationChain, address destinationContract, uint256 _blockNumber)
-        external
-    {
-        uint256 nextPeriod = getNextPeriod();
-
-        uint256 minPeriod = nextPeriod - 604800; // 1 week
-        uint256 maxPeriod = nextPeriod - 594000; // 1 week + 3 hours
-
-        /// Between the end of the previous period and the start of the next period
-        if (block.timestamp > minPeriod && block.timestamp < maxPeriod) revert UNBOUND_TIMESTAMP();
-
-        if (block.number - _blockNumber < 40) revert TO_NEW();
-        if (block.number - _blockNumber > 256) revert TOO_OLD();
-
-        bytes32 blockHash = blockhash(_blockNumber);
-
+    /// @param      currentPeriod Current period
+    function _sendBlockhash(address destinationContract, string calldata destinationChain, uint256 currentPeriod) internal {
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
-
-        IAxelarGateway(AXELAR_GATEWAY).callContract(
-            destinationChain,
-            _destinationContract,
-            abi.encode("setEthBlockHash(uint256,bytes32)", _blockNumber, blockHash)
+        bytes memory payload =
+            abi.encodeWithSignature("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
+        // pay gas in eth
+        // the gas in exceed will be reimbursed to the msg.sender
+        IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
+            address(this), destinationChain, _destinationContract, payload, msg.sender
         );
 
-        emit BlockhashSent(lastBlockNumber = _blockNumber, blockHash, destinationChain);
+        IAxelarGateway(AXELAR_GATEWAY).callContract(destinationChain, _destinationContract, payload);
+
+        destinationChains[currentPeriod][destinationChain] += 1;
+
+        emit BlockhashSent(blockNumbers[currentPeriod], blockHashes[currentPeriod], destinationChain);
     }
 
     /// @notice    Set a recipient for a destination chain
     /// @param     destinationChain The destination chain
     /// @param     destinationContract The destination contract
-    /// @param     _recipient The recipient
-    function setRecipient(string calldata destinationChain, address destinationContract, address _recipient) external {
+    /// @param     recipient The recipient
+    function setRecipient(string calldata destinationChain, address destinationContract, address recipient) external payable {
+        if (msg.value < setRecipientMinValue) revert VALUE_TOO_LOW();
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
+        bytes memory payload =
+                abi.encodeWithSignature("setRecipient(address,address)", msg.sender, recipient);
+
+        IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
+                address(this), destinationChain, _destinationContract, payload, msg.sender
+            );
 
         IAxelarGateway(AXELAR_GATEWAY).callContract(
-            destinationChain, _destinationContract, abi.encode("setRecipient(address,address)", msg.sender, _recipient)
+            destinationChain, _destinationContract, payload
         );
 
-        emit RecipientSet(msg.sender, _recipient, destinationChain);
+        emit RecipientSet(msg.sender, recipient, destinationChain);
+    }
+
+    /// @notice    Set min value (ETH) to send during the sendBlockhash() call
+    /// @param     minValue min value to set
+    function setSendBlockHashMinValue(uint256 minValue) external {
+        if (msg.sender != admin) revert ONLY_ADMIN();
+        sendBlockHashMinValue = minValue;
+    }
+
+    /// @notice    Set min value (ETH) to send during the setRecipient() call
+    /// @param     minValue min value to set
+    function setSetRecipientMinValue(uint256 minValue) external {
+        if (msg.sender != admin) revert ONLY_ADMIN();
+        setRecipientMinValue = minValue;
+    }
+
+    /// @notice    Set a new admin
+    /// @param     _admin admin address
+    function setAdmin(address _admin) external {
+        if (msg.sender != admin) revert ONLY_ADMIN();
+        admin = _admin;
     }
 
     /// @notice   Generate proof parameters for a given user, gauge and time
@@ -104,11 +182,10 @@ contract EthereumStateSender {
         return (_user, _gauge, _time, _positions, block.number);
     }
 
-    function getNextPeriod() public view returns (uint256) {
-        return (block.timestamp / 1 weeks * 1 weeks) + 1 weeks;
-    }
-
+    /// @notice   Get current period (last thursday at midnight utc time)
     function getCurrentPeriod() public view returns (uint256) {
         return (block.timestamp / 1 weeks * 1 weeks);
     }
+
+    receive() external payable {}
 }

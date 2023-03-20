@@ -30,13 +30,14 @@ contract PlatformXChainTest is Utils {
     Platform internal platform;
 
     // Bribe Token.
-    MockERC20 rewardToken = new MockERC20("Token", "TKO", 18);
+    MockERC20 rewardToken;
 
     address internal constant _user = 0x52f541764E6e90eeBc5c21Ff570De0e2D63766B6;
     address internal constant _gauge = 0x1cEBdB0856dd985fAe9b8fEa2262469360B8a3a6;
     address internal constant _blacklisted = 0x425d16B0e08a28A3Ff9e4404AE99D78C0a076C5A;
+    address internal constant _deployer = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;
 
-    AxelarGateway internal _gateway = new AxelarGateway();
+    AxelarGateway internal _gateway;
 
     // Gauge Controller
     GaugeController internal constant _gaugeController = GaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB);
@@ -44,13 +45,19 @@ contract PlatformXChainTest is Utils {
     uint256 internal constant _amount = 10_000e18;
 
     function setUp() public {
-        sender = new EthereumStateSender();
+        uint256 forkId = vm.createFork("https://eth.public-rpc.com", 16531627); // February 1st
+        vm.selectFork(forkId);
+
+        _gateway = new AxelarGateway();
+        rewardToken = new MockERC20("Token", "TKO", 18);
+
+        sender = new EthereumStateSender(_deployer);
 
         oracle = new CurveGaugeControllerOracle(address(axelarExecutable));
         axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), address(oracle));
         oracle.setAxelarExecutable(address(axelarExecutable));
 
-        platform = new Platform(address(oracle));
+        platform = new Platform(address(oracle), address(this), address(this));
 
         rewardToken.mint(address(this), _amount);
         rewardToken.approve(address(platform), _amount);
@@ -82,7 +89,7 @@ contract PlatformXChainTest is Utils {
     function testWhitelistWrongAuth() public {
         // Random User
         vm.prank(address(0x1));
-        vm.expectRevert(Platform.NOT_GOVERNANCE.selector);
+        vm.expectRevert("UNAUTHORIZED");
         platform.whitelistAddress(_user, true);
 
         assertFalse(platform.whitelisted(_user));
@@ -152,9 +159,12 @@ contract PlatformXChainTest is Utils {
         uint256 _id = _createDefaultBribe(1 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
+        skip(1 days);
+
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        _blockNumber = 16538627; // 2 of February
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -181,9 +191,12 @@ contract PlatformXChainTest is Utils {
         uint256 _id = _createDefaultBribe(1 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
+        skip(1 days);
+
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        _blockNumber = 16538627;
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -221,9 +234,12 @@ contract PlatformXChainTest is Utils {
         uint256 _id = _createDefaultBribe(1 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
+        skip(1 days);
+
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        _blockNumber = 16538627;
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -245,8 +261,12 @@ contract PlatformXChainTest is Utils {
             blackListedProofsRlp: new bytes[](0)
         });
 
+        uint256 claimable = platform.claimable(_id, _proofData);
         uint256 claimed = platform.claim(_id, _proofData);
+
         assertGt(claimed, 0);
+        assertGt(claimable, 0);
+        assertApproxEqRel(claimed, claimable, 1e15);
 
         assertEq(rewardToken.balanceOf(_user), 0);
         assertEq(rewardToken.balanceOf(FAKE_RECIPIENT), claimed);
@@ -254,7 +274,10 @@ contract PlatformXChainTest is Utils {
         assertGt(platform.rewardPerVote(_id), 0);
 
         claimed = platform.claim(_id, _proofData);
+        claimable = platform.claimable(_id, _proofData);
+
         assertEq(claimed, 0);
+        assertEq(claimable, 0);
     }
 
     function testClaimBribe() public {
@@ -262,9 +285,12 @@ contract PlatformXChainTest is Utils {
         uint256 _id = _createDefaultBribe(1 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
+        skip(1 days);
+
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        _blockNumber = 16538627;
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -281,12 +307,19 @@ contract PlatformXChainTest is Utils {
             blackListedProofsRlp: new bytes[](0)
         });
 
+        uint256 claimable = platform.claimable(_id, _proofData);
         uint256 claimed = platform.claim(_id, _proofData);
 
         assertGt(claimed, 0);
+        assertGt(claimable, 0);
+        assertApproxEqRel(claimed, claimable, 1e15);
+
         assertGt(platform.rewardPerVote(_id), 0);
 
+        claimable = platform.claimable(_id, _proofData);
         claimed = platform.claim(_id, _proofData);
+
+        assertEq(claimable, 0);
         assertEq(claimed, 0);
     }
 
@@ -295,6 +328,8 @@ contract PlatformXChainTest is Utils {
         uint256 _id = _createDefaultBribeWithBlacklist(2 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
+        skip(1 days);
+
         // Calculate blacklisted bias before sending proof.
         uint256 _bBias = _gaugeController.vote_user_slopes(_blacklisted, _gauge).slope
             * (_gaugeController.vote_user_slopes(_blacklisted, _gauge).end - _getCurrentPeriod());
@@ -302,6 +337,7 @@ contract PlatformXChainTest is Utils {
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        _blockNumber = 16538627;
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -342,6 +378,7 @@ contract PlatformXChainTest is Utils {
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        _blockNumber = 16538627;
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -363,7 +400,7 @@ contract PlatformXChainTest is Utils {
 
         vm.prank(_user);
         platform.closeBribe(_id);
-        assertEq(rewardToken.balanceOf(_user), _amount);
+        assertEq(rewardToken.balanceOf(_user), 0);
     }
 
     function _createCustomBribe(
@@ -384,7 +421,7 @@ contract PlatformXChainTest is Utils {
 
     function _createDefaultBribe(uint256 numberOfWeeks) internal returns (uint256 _id) {
         _id = platform.createBribe(_gauge, _user, address(rewardToken), 2, 2e18, _amount, new address[](0), true);
-        _overrideBribePeriod(_id, numberOfWeeks);
+        //_overrideBribePeriod(_id, numberOfWeeks);
     }
 
     function _createDefaultBribeWithBlacklist(uint256 numberOfWeeks) internal returns (uint256 _id) {
@@ -392,7 +429,7 @@ contract PlatformXChainTest is Utils {
         _blacklist[0] = _blacklisted;
 
         _id = platform.createBribe(_gauge, _user, address(rewardToken), 2, 2e18, _amount, _blacklist, true);
-        _overrideBribePeriod(_id, numberOfWeeks);
+        //_overrideBribePeriod(_id, numberOfWeeks);
     }
 
     function _getCurrentPeriod() internal view returns (uint256) {

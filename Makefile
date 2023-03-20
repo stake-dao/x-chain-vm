@@ -4,11 +4,16 @@ default:; forge fmt && forge build
 
 .EXPORT_ALL_VARIABLES:
 FOUNDRY_ETH_RPC_URL?=$(ETH_RPC_URL)
-#FOUNDRY_BLOCK_NUMBER?=15954694
+FOUNDRY_BLOCK_NUMBER?=16538627
 ETHERSCAN_API_KEY?=${ETHERSCAN_KEY}
 
 snapshot:; @forge snapshot  
-test:; @forge test  --match-contract "PlatformXChainTest" --gas-report
+test:; @forge test  --match-contract "PlatformXChainTest" --gas-report 
+test-extractor:; @forge test  --match-contract "ProofExtractorTest" --fork-url ${ETH_RPC_URL} --gas-report
+test-claim:; @forge test  --match-contract "PlatformXChainTest" --gas-report
 node:; @anvil --fork-url ${ETH_RPC_URL} --steps-tracing
 
 .PHONY: test default
+
+deploy-mainnet:; @forge script script/DeployMainnet.sol --fork-url ${ETH_RPC_URL} --private-key ${PRIVATEKEY} --broadcast --etherscan-api-key ${ETHERSCAN_KEY} --verify # --resume
+deploy-arbitrum:; @forge script script/DeployLens.sol --fork-url ${ETH_RPC_URL} --private-key ${PRIVATEKEY} --broadcast # --etherscan-api-key ${ETHERSCAN_KEY} --verify # --resume
