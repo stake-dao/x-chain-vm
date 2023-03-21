@@ -13,11 +13,11 @@ contract EthereumStateSender {
 
     address public admin;
 
-    address public constant AXELAR_GATEWAY = 0xe432150cce91c13a887f7D836923d5597adD8E31; // goerli (to change)
-    address public constant AXELAR_GAS_RECEIVER = 0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6; // goerli (to change)
+    address public constant AXELAR_GATEWAY = 0x4F4495243837681061C4743b74B3eEdf548D56A5;
+    address public constant AXELAR_GAS_RECEIVER = 0x2d5d7d31F671F86C782533cc367F14109a082712;
 
-    uint256 public sendBlockHashMinValue = 1000000000000000; // 0.001 ETH
-    uint256 public setRecipientMinValue = 400000000000000; // 0.0004 ETH
+    uint256 public sendBlockHashMinValue = 3000000000000000; // 0.003 ETH
+    uint256 public setRecipientMinValue = 1000000000000000; // 0.001 ETH
 
     mapping(uint256 => uint256) public blockNumbers;
     mapping(uint256 => bytes32) public blockHashes;
@@ -51,7 +51,7 @@ contract EthereumStateSender {
         admin = _admin;
     }
 
-    /// @notice     Send a blockhash to a destination chain (it will use the current block's blockhash)
+    /// @notice     Send a blockhash to a destination chain (it will use the previous block's blockhash)
     /// @param      _destinationChain The destination chain
     /// @param      _destinationContract The destination contract
     function sendBlockhash(string calldata _destinationChain, address _destinationContract) public payable {
@@ -64,7 +64,7 @@ contract EthereumStateSender {
             blockNumbers[currentPeriod] = block.number - 1;
         }
 
-        if (destinationChains[currentPeriod][_destinationChain] == 0) {
+        if (blockNumbers[currentPeriod] != 0 && destinationChains[currentPeriod][_destinationChain] == 0) {
             _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
         }
     }
