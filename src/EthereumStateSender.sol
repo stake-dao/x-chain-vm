@@ -140,6 +140,7 @@ contract EthereumStateSender {
     function setSendBlockHashMinValue(uint256 minValue) external {
         if (msg.sender != admin) revert ONLY_ADMIN();
         sendBlockHashMinValue = minValue;
+        emit SendBlockhashMinValueSet(minValue);
     }
 
     /// @notice    Set min value (ETH) to send during the setRecipient() call
@@ -147,6 +148,7 @@ contract EthereumStateSender {
     function setSetRecipientMinValue(uint256 minValue) external {
         if (msg.sender != admin) revert ONLY_ADMIN();
         setRecipientMinValue = minValue;
+        emit SetRecipientMinValueSet(minValue);
     }
 
     /// @notice    Set a new admin
@@ -154,6 +156,7 @@ contract EthereumStateSender {
     function setAdmin(address _admin) external {
         if (msg.sender != admin) revert ONLY_ADMIN();
         admin = _admin;
+        emit AdminSet(_admin);
     }
 
     /// @notice   Generate proof parameters for a given user, gauge and time
