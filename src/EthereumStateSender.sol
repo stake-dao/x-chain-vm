@@ -13,11 +13,11 @@ contract EthereumStateSender {
 
     address public admin;
 
-    address public constant AXELAR_GATEWAY = 0xe432150cce91c13a887f7D836923d5597adD8E31; // goerli (to change)
-    address public constant AXELAR_GAS_RECEIVER = 0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6; // goerli (to change)
+    address public constant AXELAR_GATEWAY = 0x4F4495243837681061C4743b74B3eEdf548D56A5;
+    address public constant AXELAR_GAS_RECEIVER = 0x2d5d7d31F671F86C782533cc367F14109a082712;
 
-    uint256 public sendBlockHashMinValue = 1000000000000000; // 0.001 ETH
-    uint256 public setRecipientMinValue = 400000000000000; // 0.0004 ETH
+    uint256 public sendBlockHashMinValue = 3000000000000000; // 0.003 ETH
+    uint256 public setRecipientMinValue = 1000000000000000; // 0.001 ETH
 
     mapping(uint256 => uint256) public blockNumbers;
     mapping(uint256 => bytes32) public blockHashes;
@@ -39,7 +39,7 @@ contract EthereumStateSender {
     /// @param _admin The admin address
     event AdminSet(address _admin);
 
-    /// @notice Emitted when a new sendBlockHashMinValue is set
+    /// @notice Emitted when a new sendBlockhashMinValue is set
     /// @param _minValue The min eth value to pass on the call 
     event SendBlockhashMinValueSet(uint256 _minValue);
 
@@ -51,7 +51,7 @@ contract EthereumStateSender {
         admin = _admin;
     }
 
-    /// @notice     Send a blockhash to a destination chain (it will use the current block's blockhash)
+    /// @notice     Send a blockhash to a destination chain (it will use the previous block's blockhash)
     /// @param      _destinationChain The destination chain
     /// @param      _destinationContract The destination contract
     function sendBlockhash(string calldata _destinationChain, address _destinationContract) public payable {
@@ -64,12 +64,12 @@ contract EthereumStateSender {
             blockNumbers[currentPeriod] = block.number - 1;
         }
 
-        if (destinationChains[currentPeriod][_destinationChain] == 0) {
+        if (blockNumbers[currentPeriod] != 0 && destinationChains[currentPeriod][_destinationChain] == 0) {
             _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
         }
     }
 
-    /// @notice     Send a blockhash to a list of destination chains (it will use the current block's blockhash)
+    /// @notice     Send a blockhash to a list of destination chains (it will use the previous block's blockhash)
     /// @param      _destinationChains The destination chains array
     /// @param      _destinationContracts The destination contracts array
     function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts) external payable {
@@ -87,7 +87,7 @@ contract EthereumStateSender {
     /// @param      _destinationChain The destination chain 
     /// @param      _destinationContract The destination contract
     function sendBlockhashEmergency(string calldata _destinationChain, address _destinationContract) external payable {
-        if(msg.sender != admin) revert ONLY_ADMIN();
+        if (msg.sender != admin) revert ONLY_ADMIN();
         if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
         uint256 currentPeriod = getCurrentPeriod();
         _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
@@ -140,6 +140,7 @@ contract EthereumStateSender {
     function setSendBlockHashMinValue(uint256 minValue) external {
         if (msg.sender != admin) revert ONLY_ADMIN();
         sendBlockHashMinValue = minValue;
+        emit SendBlockhashMinValueSet(minValue);
     }
 
     /// @notice    Set min value (ETH) to send during the setRecipient() call
@@ -147,6 +148,7 @@ contract EthereumStateSender {
     function setSetRecipientMinValue(uint256 minValue) external {
         if (msg.sender != admin) revert ONLY_ADMIN();
         setRecipientMinValue = minValue;
+        emit SetRecipientMinValueSet(minValue);
     }
 
     /// @notice    Set a new admin
@@ -154,6 +156,7 @@ contract EthereumStateSender {
     function setAdmin(address _admin) external {
         if (msg.sender != admin) revert ONLY_ADMIN();
         admin = _admin;
+        emit AdminSet(_admin);
     }
 
     /// @notice   Generate proof parameters for a given user, gauge and time
