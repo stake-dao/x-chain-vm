@@ -39,7 +39,7 @@ contract EthereumStateSender {
     /// @param _admin The admin address
     event AdminSet(address _admin);
 
-    /// @notice Emitted when a new sendBlockHashMinValue is set
+    /// @notice Emitted when a new sendBlockhashMinValue is set
     /// @param _minValue The min eth value to pass on the call 
     event SendBlockhashMinValueSet(uint256 _minValue);
 
@@ -87,7 +87,7 @@ contract EthereumStateSender {
     /// @param      _destinationChain The destination chain 
     /// @param      _destinationContract The destination contract
     function sendBlockhashEmergency(string calldata _destinationChain, address _destinationContract) external payable {
-        if(msg.sender != admin) revert ONLY_ADMIN();
+        if (msg.sender != admin) revert ONLY_ADMIN();
         if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
         uint256 currentPeriod = getCurrentPeriod();
         _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
