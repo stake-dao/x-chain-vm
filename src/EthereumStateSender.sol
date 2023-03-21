@@ -69,7 +69,7 @@ contract EthereumStateSender {
         }
     }
 
-    /// @notice     Send a blockhash to a list of destination chains (it will use the current block's blockhash)
+    /// @notice     Send a blockhash to a list of destination chains (it will use the previous block's blockhash)
     /// @param      _destinationChains The destination chains array
     /// @param      _destinationContracts The destination contracts array
     function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts) external payable {
