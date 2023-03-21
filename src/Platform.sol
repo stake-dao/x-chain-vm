@@ -50,7 +50,6 @@ import {Owned} from "solmate/auth/Owned.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {GaugeController} from "src/interfaces/GaugeController.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {IGaugeControllerOracle} from "src/interfaces/IGaugeControllerOracle.sol";
 
@@ -145,7 +144,7 @@ contract Platform is Owned, ReentrancyGuard {
     uint256 internal constant _DEFAULT_FEE = 2e16; // 2%
 
     /// @notice Gauge Controller.
-    IGaugeControllerOracle public immutable gaugeController;
+    IGaugeControllerOracle public gaugeController;
 
     ////////////////////////////////////////////////////////////////
     /// --- STORAGE VARS
@@ -299,6 +298,10 @@ contract Platform is Owned, ReentrancyGuard {
     /// @notice Emitted when fee collector is updated.
     /// @param feeCollector Fee collector.
     event FeeCollectorUpdated(address feeCollector);
+
+    /// @notice Emitted when gauge controller (oracle) is updated.
+    /// @param gaugeController Gauge controller.
+    event GaugeControllerUpdated(address gaugeController);
 
     /// @notice Emitted when fees are collected.
     /// @param rewardToken Reward token address.
@@ -892,6 +895,14 @@ contract Platform is Owned, ReentrancyGuard {
         feeCollector = _feeCollector;
 
         emit FeeCollectorUpdated(_feeCollector);
+    }
+
+    /// @notice Set the gauge controller (oracle).
+    /// @param _gaugeController Address of the gauge controller.
+    function setGaugeController(address _gaugeController) external onlyOwner {
+        gaugeController = IGaugeControllerOracle(_gaugeController);
+
+        emit GaugeControllerUpdated(_gaugeController);
     }
 
     /// @notice Set the recipient for a given address.

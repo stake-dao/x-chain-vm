@@ -9,7 +9,7 @@ import {CurveGaugeControllerOracle} from "src/CurveGaugeControllerOracle.sol";
 
 contract DeploySideChains is Script {
     /// Ethereum State Sender.
-    address internal constant ETH_STATE_SENDER = 0x0000000000000000000000000000000000000000;
+    address internal constant ETH_STATE_SENDER = 0xC19d317c84e43F93fFeBa146f4f116A6F2B04663;
 
     /// Arbitrum Axelar Gateway.
     address internal constant _AXELAR_GATEWAY = 0xe432150cce91c13a887f7D836923d5597adD8E31;
