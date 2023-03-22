@@ -9,7 +9,6 @@ contract AxelarExecutable is IAxelarExecutable, Owned {
     using LibString for string;
     using LibString for address;
 
-    error NOT_OWNER();
     error CALL_FAILED();
     error WRONG_SOURCE_CHAIN();
     error WRONG_SOURCE_ADDRESS();
