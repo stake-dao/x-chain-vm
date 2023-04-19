@@ -53,7 +53,6 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {IGaugeControllerOracle} from "src/interfaces/IGaugeControllerOracle.sol";
 
-/// version 2.0.0
 /// @title  Platform
 /// @author Stake DAO
 contract Platform is Owned, ReentrancyGuard {
