@@ -53,7 +53,6 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {IGaugeControllerOracle} from "src/interfaces/IGaugeControllerOracle.sol";
 
-/// version 2.0.0
 /// @title  Platform
 /// @author Stake DAO
 contract Platform is Owned, ReentrancyGuard {
@@ -100,8 +99,6 @@ contract Platform is Owned, ReentrancyGuard {
         uint256 maxRewardPerVote;
         // New end timestamp after increase.
         uint256 endTimestamp;
-        // Blacklisted addresses.
-        address[] blacklist;
     }
 
     /// @notice Period struct.
@@ -556,8 +553,9 @@ contract Platform is Owned, ReentrancyGuard {
             bribes[bribeId].maxRewardPerVote = upgradedBribe.maxRewardPerVote;
             bribes[bribeId].totalRewardAmount = upgradedBribe.totalRewardAmount;
 
-            if (upgradedBribe.blacklist.length > 0) {
-                bribes[bribeId].blacklist = upgradedBribe.blacklist;
+            if (activePeriod[bribeId].id == 0) {
+                activePeriod[bribeId].rewardPerPeriod =
+                    upgradedBribe.totalRewardAmount.mulDiv(1, upgradedBribe.numberOfPeriods);
             }
 
             emit BribeDurationIncreased(
@@ -666,6 +664,7 @@ contract Platform is Owned, ReentrancyGuard {
                     : gaugeBias.bias
             );
         }
+
         // Get user voting power.
         uint256 _bias = _getAddrBias(userSlope.slope, userSlope.end, currentPeriod);
         // Estimation of the amount of rewards.
@@ -781,8 +780,7 @@ contract Platform is Owned, ReentrancyGuard {
         uint256 _bribeId,
         uint8 _additionnalPeriods,
         uint256 _increasedAmount,
-        uint256 _newMaxPricePerVote,
-        address[] calldata _addressesBlacklisted
+        uint256 _newMaxPricePerVote
     ) external nonReentrant notKilled onlyManager(_bribeId) {
         if (!isUpgradeable[_bribeId]) revert NOT_UPGRADEABLE();
         if (getPeriodsLeft(_bribeId) < 1) revert NO_PERIODS_LEFT();
@@ -800,16 +798,14 @@ contract Platform is Owned, ReentrancyGuard {
                 numberOfPeriods: upgradedBribe.numberOfPeriods + _additionnalPeriods,
                 totalRewardAmount: upgradedBribe.totalRewardAmount + _increasedAmount,
                 maxRewardPerVote: _newMaxPricePerVote,
-                endTimestamp: upgradedBribe.endTimestamp + (_additionnalPeriods * _WEEK),
-                blacklist: _addressesBlacklisted
+                endTimestamp: upgradedBribe.endTimestamp + (_additionnalPeriods * _WEEK)
             });
         } else {
             upgradedBribe = Upgrade({
                 numberOfPeriods: bribe.numberOfPeriods + _additionnalPeriods,
                 totalRewardAmount: bribe.totalRewardAmount + _increasedAmount,
                 maxRewardPerVote: _newMaxPricePerVote,
-                endTimestamp: bribe.endTimestamp + (_additionnalPeriods * _WEEK),
-                blacklist: _addressesBlacklisted
+                endTimestamp: bribe.endTimestamp + (_additionnalPeriods * _WEEK)
             });
         }
 
@@ -857,7 +853,7 @@ contract Platform is Owned, ReentrancyGuard {
 
     /// @notice Claim fees.
     /// @param rewardTokens Array of reward tokens.
-    function claimFees(address[] calldata rewardTokens) external onlyOwner {
+    function claimFees(address[] calldata rewardTokens) external {
         uint256 _feeAccrued;
         uint256 length = rewardTokens.length;
 
@@ -983,5 +979,9 @@ contract Platform is Owned, ReentrancyGuard {
     {
         if (currentPeriod + _WEEK >= endLockTime) return 0;
         return userSlope * (endLockTime - currentPeriod);
+    }
+
+    function getVersion() external pure returns (string memory) {
+        return "2.1.0";
     }
 }

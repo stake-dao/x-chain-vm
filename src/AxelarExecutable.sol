@@ -45,14 +45,14 @@ contract AxelarExecutable is IAxelarExecutable, Owned {
 
     /// @notice Set a new oracle
     /// @param _oracle oracle address
-    function setOracle(address _oracle) external onlyOwner() {
+    function setOracle(address _oracle) external onlyOwner {
         oracle = _oracle;
         emit OracleSet(oracle);
     }
 
     /// @notice Set a new ethereum state sender
     /// @param _ess ess address
-    function setEthStateSender(address _ess) external onlyOwner() {
+    function setEthStateSender(address _ess) external onlyOwner {
         ess = _ess;
         strEss = _ess.toHexStringChecksumed();
         emit EssSet(ess);
