@@ -40,11 +40,11 @@ contract EthereumStateSender {
     event AdminSet(address _admin);
 
     /// @notice Emitted when a new sendBlockhashMinValue is set
-    /// @param _minValue The min eth value to pass on the call 
+    /// @param _minValue The min eth value to pass on the call
     event SendBlockhashMinValueSet(uint256 _minValue);
 
     /// @notice Emitted when a new setRecipientMinValue is set
-    /// @param _minValue The min eth value to pass on the call 
+    /// @param _minValue The min eth value to pass on the call
     event SetRecipientMinValueSet(uint256 _minValue);
 
     constructor(address _admin) {
@@ -72,7 +72,10 @@ contract EthereumStateSender {
     /// @notice     Send a blockhash to a list of destination chains (it will use the previous block's blockhash)
     /// @param      _destinationChains The destination chains array
     /// @param      _destinationContracts The destination contracts array
-    function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts) external payable {
+    function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts)
+        external
+        payable
+    {
         uint256 lenght = _destinationChains.length;
         if (msg.value < sendBlockHashMinValue * lenght) revert VALUE_TOO_LOW();
         for (uint256 i; i < lenght;) {
@@ -84,7 +87,7 @@ contract EthereumStateSender {
     }
 
     /// @notice     Send a blockhash to a destination chain, function used only in emergency cases
-    /// @param      _destinationChain The destination chain 
+    /// @param      _destinationChain The destination chain
     /// @param      _destinationContract The destination contract
     function sendBlockhashEmergency(string calldata _destinationChain, address _destinationContract) external payable {
         if (msg.sender != admin) revert ONLY_ADMIN();
@@ -94,13 +97,16 @@ contract EthereumStateSender {
     }
 
     /// @notice     Internal function to send a blockhash to a destination chain
-    /// @param      destinationChain The destination chain 
+    /// @param      destinationChain The destination chain
     /// @param      destinationContract The destination contract
     /// @param      currentPeriod Current period
-    function _sendBlockhash(address destinationContract, string calldata destinationChain, uint256 currentPeriod) internal {
+    function _sendBlockhash(address destinationContract, string calldata destinationChain, uint256 currentPeriod)
+        internal
+    {
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
-        bytes memory payload =
-            abi.encodeWithSignature("setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]);
+        bytes memory payload = abi.encodeWithSignature(
+            "setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]
+        );
         // pay gas in eth
         // the gas in exceed will be reimbursed to the msg.sender
         IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
@@ -118,19 +124,19 @@ contract EthereumStateSender {
     /// @param     destinationChain The destination chain
     /// @param     destinationContract The destination contract
     /// @param     recipient The recipient
-    function setRecipient(string calldata destinationChain, address destinationContract, address recipient) external payable {
+    function setRecipient(string calldata destinationChain, address destinationContract, address recipient)
+        external
+        payable
+    {
         if (msg.value < setRecipientMinValue) revert VALUE_TOO_LOW();
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
-        bytes memory payload =
-                abi.encodeWithSignature("setRecipient(address,address)", msg.sender, recipient);
+        bytes memory payload = abi.encodeWithSignature("setRecipient(address,address)", msg.sender, recipient);
 
         IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
-                address(this), destinationChain, _destinationContract, payload, msg.sender
-            );
-
-        IAxelarGateway(AXELAR_GATEWAY).callContract(
-            destinationChain, _destinationContract, payload
+            address(this), destinationChain, _destinationContract, payload, msg.sender
         );
+
+        IAxelarGateway(AXELAR_GATEWAY).callContract(destinationChain, _destinationContract, payload);
 
         emit RecipientSet(msg.sender, recipient, destinationChain);
     }

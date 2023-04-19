@@ -18,6 +18,9 @@ contract ProofExtractorTest is Utils {
     address internal constant _deployer = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;
 
     function setUp() public {
+        uint256 forkId = vm.createFork("https://eth.public-rpc.com", 16531627); // February 1st
+        vm.selectFork(forkId);
+
         sender = new EthereumStateSender(_deployer);
         oracle = new CurveGaugeControllerOracle(address(0));
     }
