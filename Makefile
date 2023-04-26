@@ -16,4 +16,4 @@ node:; @anvil --fork-url ${ETH_RPC_URL} --steps-tracing
 .PHONY: test default
 
 deploy-mainnet:; @forge script script/DeployMainnet.sol --fork-url ${ETH_RPC_URL} --private-key ${PRIVATEKEY} --broadcast --etherscan-api-key ${ETHERSCAN_KEY} --verify # --resume
-deploy-arbitrum:; @forge script script/DeploySideChains.sol --fork-url ${ARBITRUM_RPC_URL} --private-key ${PRIVATEKEY} --broadcast # --etherscan-api-key ${ETHERSCAN_KEY} --verify # --resume
+deploy-arbitrum:; @forge script script/DeploySideChains.sol # --fork-url ${ARBITRUM_RPC_URL} # --private-key ${PRIVATEKEY} --broadcast # --etherscan-api-key ${ETHERSCAN_KEY} --verify # --resume

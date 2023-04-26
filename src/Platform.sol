@@ -70,8 +70,8 @@ contract Platform is Owned, ReentrancyGuard {
     /// --- STRUCTS
     ///////////////////////////////////////////////////////////////
 
-    /// @notice Bribe struct requirements.
-    struct Bribe {
+    /// @notice Bounty struct requirements.
+    struct Bounty {
         // Address of the target gauge.
         address gauge;
         // Manager.
@@ -80,7 +80,7 @@ contract Platform is Owned, ReentrancyGuard {
         address rewardToken;
         // Number of periods.
         uint8 numberOfPeriods;
-        // Timestamp where the bribe become unclaimable.
+        // Timestamp where the bounty become unclaimable.
         uint256 endTimestamp;
         // Max Price per vote.
         uint256 maxRewardPerVote;
@@ -128,7 +128,7 @@ contract Platform is Owned, ReentrancyGuard {
     /// --- CONSTANTS & IMMUTABLES
     ///////////////////////////////////////////////////////////////
 
-    /// @notice Minimum duration a Bribe.
+    /// @notice Minimum duration a Bounty.
     uint8 public constant MINIMUM_PERIOD = 2;
 
     /// @notice Week in seconds.
@@ -150,14 +150,14 @@ contract Platform is Owned, ReentrancyGuard {
     /// @notice Fee.
     uint256 public fee;
 
-    /// @notice Bribe ID Counter.
+    /// @notice Bounty ID Counter.
     uint256 public nextID;
 
     /// @notice Fee collector.
     address public feeCollector;
 
-    /// @notice ID => Bribe.
-    mapping(uint256 => Bribe) public bribes;
+    /// @notice ID => Bounty.
+    mapping(uint256 => Bounty) public bounties;
 
     /// @notice Whitelisted Address(Liquid Wrappers) to prevent claiming on their behalf if no recipient is set.
     mapping(address => bool) public whitelisted;
@@ -168,22 +168,22 @@ contract Platform is Owned, ReentrancyGuard {
     /// @notice Fee accrued per rewardToken.
     mapping(address => uint256) public feeAccrued;
 
-    /// @notice BribeId => isUpgradeable. If true, the bribe can be upgraded.
+    /// @notice BountyId => isUpgradeable. If true, the bounty can be upgraded.
     mapping(uint256 => bool) public isUpgradeable;
 
     /// @notice ID => Period running.
     mapping(uint256 => Period) public activePeriod;
 
-    /// @notice ID => Amount Claimed per Bribe.
+    /// @notice ID => Amount Claimed per Bounty.
     mapping(uint256 => uint256) public amountClaimed;
 
     /// @notice ID => Amount of reward per vote distributed.
     mapping(uint256 => uint256) public rewardPerVote;
 
-    /// @notice ID => Bribe In Queue to be upgraded.
-    mapping(uint256 => Upgrade) public upgradeBribeQueue;
+    /// @notice ID => Bounty In Queue to be upgraded.
+    mapping(uint256 => Upgrade) public upgradeBountyQueue;
 
-    /// @notice Blacklisted addresses per bribe that aren't counted for rewards arithmetics.
+    /// @notice Blacklisted addresses per bounty that aren't counted for rewards arithmetics.
     mapping(uint256 => mapping(address => bool)) public isBlacklisted;
 
     /// @notice Last time a user claimed
@@ -202,7 +202,7 @@ contract Platform is Owned, ReentrancyGuard {
     }
 
     modifier onlyManager(uint256 _id) {
-        if (msg.sender != bribes[_id].manager) revert AUTH_MANAGER_ONLY();
+        if (msg.sender != bounties[_id].manager) revert AUTH_MANAGER_ONLY();
         _;
     }
 
@@ -210,8 +210,8 @@ contract Platform is Owned, ReentrancyGuard {
     /// --- EVENTS
     ///////////////////////////////////////////////////////////////
 
-    /// @notice Emitted when a new bribe is created.
-    /// @param id Bribe ID.
+    /// @notice Emitted when a new bounty is created.
+    /// @param id Bounty ID.
     /// @param gauge Gauge address.
     /// @param manager Manager address.
     /// @param rewardToken Reward token address.
@@ -219,8 +219,8 @@ contract Platform is Owned, ReentrancyGuard {
     /// @param maxRewardPerVote Max reward per vote.
     /// @param rewardPerPeriod Reward per period.
     /// @param totalRewardAmount Total reward amount.
-    /// @param isUpgradeable If true, the bribe can be upgraded.
-    event BribeCreated(
+    /// @param isUpgradeable If true, the bounty can be upgraded.
+    event BountyCreated(
         uint256 indexed id,
         address indexed gauge,
         address manager,
@@ -232,13 +232,13 @@ contract Platform is Owned, ReentrancyGuard {
         bool isUpgradeable
     );
 
-    /// @notice Emitted when a bribe is closed.
-    /// @param id Bribe ID.
+    /// @notice Emitted when a bounty is closed.
+    /// @param id Bounty ID.
     /// @param remainingReward Remaining reward.
-    event BribeClosed(uint256 id, uint256 remainingReward);
+    event BountyClosed(uint256 id, uint256 remainingReward);
 
-    /// @notice Emitted when a bribe period is rolled over.
-    /// @param id Bribe ID.
+    /// @notice Emitted when a bounty period is rolled over.
+    /// @param id Bounty ID.
     /// @param periodId Period ID.
     /// @param timestamp Period timestamp.
     /// @param rewardPerPeriod Reward per period.
@@ -247,39 +247,39 @@ contract Platform is Owned, ReentrancyGuard {
     /// @notice Emitted on claim.
     /// @param user User address.
     /// @param rewardToken Reward token address.
-    /// @param bribeId Bribe ID.
+    /// @param bountyId Bounty ID.
     /// @param amount Amount claimed.
     /// @param protocolFees Protocol fees.
     /// @param period Period timestamp.
     event Claimed(
         address indexed user,
         address rewardToken,
-        uint256 indexed bribeId,
+        uint256 indexed bountyId,
         uint256 amount,
         uint256 protocolFees,
         uint256 period
     );
 
-    /// @notice Emitted when a bribe is queued to upgrade.
-    /// @param id Bribe ID.
+    /// @notice Emitted when a bounty is queued to upgrade.
+    /// @param id Bounty ID.
     /// @param numberOfPeriods Number of periods.
     /// @param totalRewardAmount Total reward amount.
     /// @param maxRewardPerVote Max reward per vote.
-    event BribeDurationIncreaseQueued(
+    event BountyDurationIncreaseQueued(
         uint256 id, uint8 numberOfPeriods, uint256 totalRewardAmount, uint256 maxRewardPerVote
     );
 
-    /// @notice Emitted when a bribe is upgraded.
-    /// @param id Bribe ID.
+    /// @notice Emitted when a bounty is upgraded.
+    /// @param id Bounty ID.
     /// @param numberOfPeriods Number of periods.
     /// @param totalRewardAmount Total reward amount.
     /// @param maxRewardPerVote Max reward per vote.
-    event BribeDurationIncreased(
+    event BountyDurationIncreased(
         uint256 id, uint8 numberOfPeriods, uint256 totalRewardAmount, uint256 maxRewardPerVote
     );
 
-    /// @notice Emitted when a bribe manager is updated.
-    /// @param id Bribe ID.
+    /// @notice Emitted when a bounty manager is updated.
+    /// @param id Bounty ID.
     /// @param manager Manager address.
     event ManagerUpdated(uint256 id, address indexed manager);
 
@@ -312,6 +312,7 @@ contract Platform is Owned, ReentrancyGuard {
     error KILLED();
     error WRONG_INPUT();
     error ZERO_ADDRESS();
+    error ALREADY_CLOSED();
     error NOT_UPGRADEABLE();
     error NO_PERIODS_LEFT();
     error USER_NOT_UPDATED();
@@ -322,7 +323,7 @@ contract Platform is Owned, ReentrancyGuard {
     /// --- CONSTRUCTOR
     ///////////////////////////////////////////////////////////////
 
-    /// @notice Create Bribe platform.
+    /// @notice Create Bounty platform.
     /// @param _gaugeController Address of the gauge controller.
     constructor(address _gaugeController, address _feeCollector, address _owner) Owned(_owner) {
         fee = _DEFAULT_FEE;
@@ -331,18 +332,18 @@ contract Platform is Owned, ReentrancyGuard {
     }
 
     ////////////////////////////////////////////////////////////////
-    /// --- BRIBE CREATION LOGIC
+    /// --- BOUNTY CREATION LOGIC
     ///////////////////////////////////////////////////////////////
 
-    /// @notice Create a new bribe.
+    /// @notice Create a new bounty.
     /// @param gauge Address of the target gauge.
     /// @param rewardToken Address of the ERC20 used or rewards.
     /// @param numberOfPeriods Number of periods.
     /// @param maxRewardPerVote Target Bias for the Gauge.
     /// @param totalRewardAmount Total Reward Added.
     /// @param blacklist Array of addresses to blacklist.
-    /// @return newBribeID of the bribe created.
-    function createBribe(
+    /// @return newBountyId of the bounty created.
+    function createBounty(
         address gauge,
         address manager,
         address rewardToken,
@@ -351,7 +352,7 @@ contract Platform is Owned, ReentrancyGuard {
         uint256 totalRewardAmount,
         address[] calldata blacklist,
         bool upgradeable
-    ) external nonReentrant notKilled returns (uint256 newBribeID) {
+    ) external nonReentrant notKilled returns (uint256 newBountyId) {
         if (rewardToken == address(0)) revert ZERO_ADDRESS();
         if (numberOfPeriods < MINIMUM_PERIOD) revert INVALID_NUMBER_OF_PERIODS();
         if (totalRewardAmount == 0 || maxRewardPerVote == 0) revert WRONG_INPUT();
@@ -360,8 +361,8 @@ contract Platform is Owned, ReentrancyGuard {
         SafeTransferLib.safeTransferFrom(rewardToken, msg.sender, address(this), totalRewardAmount);
 
         unchecked {
-            // Get the ID for that new Bribe and increment the nextID counter.
-            newBribeID = nextID;
+            // Get the ID for that new Bounty and increment the nextID counter.
+            newBountyId = nextID;
 
             ++nextID;
         }
@@ -369,7 +370,7 @@ contract Platform is Owned, ReentrancyGuard {
         uint256 rewardPerPeriod = totalRewardAmount.mulDiv(1, numberOfPeriods);
         uint256 currentPeriod = getCurrentPeriod();
 
-        bribes[newBribeID] = Bribe({
+        bounties[newBountyId] = Bounty({
             gauge: gauge,
             manager: manager,
             rewardToken: rewardToken,
@@ -380,8 +381,8 @@ contract Platform is Owned, ReentrancyGuard {
             blacklist: blacklist
         });
 
-        emit BribeCreated(
-            newBribeID,
+        emit BountyCreated(
+            newBountyId,
             gauge,
             manager,
             rewardToken,
@@ -393,29 +394,29 @@ contract Platform is Owned, ReentrancyGuard {
         );
 
         // Set Upgradeable status.
-        isUpgradeable[newBribeID] = upgradeable;
+        isUpgradeable[newBountyId] = upgradeable;
         // Starting from next period.
-        activePeriod[newBribeID] = Period(0, currentPeriod + _WEEK, rewardPerPeriod);
+        activePeriod[newBountyId] = Period(0, currentPeriod + _WEEK, rewardPerPeriod);
 
         // Add the addresses to the blacklist.
         uint256 length = blacklist.length;
         for (uint256 i = 0; i < length;) {
-            isBlacklisted[newBribeID][blacklist[i]] = true;
+            isBlacklisted[newBountyId][blacklist[i]] = true;
             unchecked {
                 ++i;
             }
         }
     }
 
-    /// @notice Claim rewards for a given bribe.
-    /// @param bribeId ID of the bribe.
+    /// @notice Claim rewards for a given bounty.
+    /// @param bountyId ID of the bounty.
     /// @return Amount of rewards claimed.
-    function claim(uint256 bribeId, ProofData memory proofData) external returns (uint256) {
-        return _claim(bribeId, proofData);
+    function claim(uint256 bountyId, ProofData memory proofData) external returns (uint256) {
+        return _claim(bountyId, proofData);
     }
 
-    /// @notice Claim all rewards for multiple bribes.
-    /// @param ids Array of bribe IDs to claim.
+    /// @notice Claim all rewards for multiple bounties.
+    /// @param ids Array of bounty IDs to claim.
     function claimAll(uint256[] calldata ids, ProofData[] calldata proofs) external {
         uint256 length = ids.length;
 
@@ -433,71 +434,71 @@ contract Platform is Owned, ReentrancyGuard {
     /// --- INTERNAL LOGIC
     ///////////////////////////////////////////////////////////////
 
-    /// @notice Claim rewards for a given bribe.
-    /// @param _bribeId ID of the bribe.
+    /// @notice Claim rewards for a given bounty.
+    /// @param _bountyId ID of the bounty.
     /// @return amount of rewards claimed.
-    function _claim(uint256 _bribeId, ProofData memory proofData)
+    function _claim(uint256 _bountyId, ProofData memory proofData)
         internal
         nonReentrant
         notKilled
         returns (uint256 amount)
     {
-        if (isBlacklisted[_bribeId][proofData.user]) return 0;
+        if (isBlacklisted[_bountyId][proofData.user]) return 0;
         // Update if needed the current period.
-        uint256 currentPeriod = _updateBribePeriod(_bribeId, proofData);
+        uint256 currentPeriod = _updateBountyPeriod(_bountyId, proofData);
         uint256 snapshotBlock = gaugeController.last_eth_block_number();
 
         if (currentPeriod != gaugeController.activePeriod()) return 0;
 
-        Bribe storage bribe = bribes[_bribeId];
+        Bounty storage bounty = bounties[_bountyId];
 
         IGaugeControllerOracle.VotedSlope memory userSlope;
         uint256 lastVote;
 
-        if (gaugeController.isUserUpdated(snapshotBlock, proofData.user, bribe.gauge)) {
-            userSlope = gaugeController.voteUserSlope(snapshotBlock, proofData.user, bribe.gauge);
-            lastVote = gaugeController.lastUserVote(snapshotBlock, proofData.user, bribe.gauge);
+        if (gaugeController.isUserUpdated(snapshotBlock, proofData.user, bounty.gauge)) {
+            userSlope = gaugeController.voteUserSlope(snapshotBlock, proofData.user, bounty.gauge);
+            lastVote = gaugeController.lastUserVote(snapshotBlock, proofData.user, bounty.gauge);
         } else {
             (, userSlope, lastVote,) = gaugeController.extractProofState(
-                proofData.user, bribe.gauge, proofData.headerRlp, proofData.userProofRlp
+                proofData.user, bounty.gauge, proofData.headerRlp, proofData.userProofRlp
             );
         }
 
         if (
-            userSlope.slope == 0 || lastUserClaim[proofData.user][_bribeId] >= currentPeriod
-                || currentPeriod >= userSlope.end || currentPeriod <= lastVote || currentPeriod >= bribe.endTimestamp
+            userSlope.slope == 0 || lastUserClaim[proofData.user][_bountyId] >= currentPeriod
+                || currentPeriod >= userSlope.end || currentPeriod <= lastVote || currentPeriod >= bounty.endTimestamp
                 || currentPeriod != getCurrentPeriod()
         ) return 0;
 
         // Update User last claim period.
-        lastUserClaim[proofData.user][_bribeId] = currentPeriod;
+        lastUserClaim[proofData.user][_bountyId] = currentPeriod;
 
         // Voting Power = userSlope * dt
         // with dt = lock_end - period.
         uint256 _bias = _getAddrBias(userSlope.slope, userSlope.end, currentPeriod);
         // Compute the reward amount based on
         // Reward / Total Votes.
-        amount = _bias.mulWad(rewardPerVote[_bribeId]);
+        amount = _bias.mulWad(rewardPerVote[_bountyId]);
         // Compute the reward amount based on
         // the max price to pay.
-        uint256 _amountWithMaxPrice = _bias.mulWad(bribe.maxRewardPerVote);
+        uint256 _amountWithMaxPrice = _bias.mulWad(bounty.maxRewardPerVote);
         // Distribute the _min between the amount based on votes, and price.
         amount = FixedPointMathLib.min(amount, _amountWithMaxPrice);
 
         // Update the amount claimed.
-        uint256 _amountClaimed = amountClaimed[_bribeId];
+        uint256 _amountClaimed = amountClaimed[_bountyId];
 
-        if (amount + _amountClaimed > bribe.totalRewardAmount) {
-            amount = bribe.totalRewardAmount - _amountClaimed;
+        if (amount + _amountClaimed > bounty.totalRewardAmount) {
+            amount = bounty.totalRewardAmount - _amountClaimed;
         }
 
-        amountClaimed[_bribeId] += amount;
+        amountClaimed[_bountyId] += amount;
 
         uint256 feeAmount;
         if (fee != 0) {
             feeAmount = amount.mulWad(fee);
             amount -= feeAmount;
-            feeAccrued[bribe.rewardToken] += feeAmount;
+            feeAccrued[bounty.rewardToken] += feeAmount;
         }
 
         address receiver = gaugeController.recipient(proofData.user);
@@ -505,35 +506,35 @@ contract Platform is Owned, ReentrancyGuard {
         receiver = receiver != address(0) ? receiver : proofData.user;
 
         // Transfer to user.
-        SafeTransferLib.safeTransfer(bribe.rewardToken, receiver, amount);
+        SafeTransferLib.safeTransfer(bounty.rewardToken, receiver, amount);
 
-        emit Claimed(proofData.user, bribe.rewardToken, _bribeId, amount, feeAmount, currentPeriod);
+        emit Claimed(proofData.user, bounty.rewardToken, _bountyId, amount, feeAmount, currentPeriod);
     }
 
-    /// @notice Update the current period for a given bribe.
-    /// @param bribeId Bribe ID.
+    /// @notice Update the current period for a given bounty.
+    /// @param bountyId Bounty ID.
     /// @return current/updated period.
-    function _updateBribePeriod(uint256 bribeId, ProofData memory proofData) internal returns (uint256) {
-        Period storage _activePeriod = activePeriod[bribeId];
+    function _updateBountyPeriod(uint256 bountyId, ProofData memory proofData) internal returns (uint256) {
+        Period storage _activePeriod = activePeriod[bountyId];
 
         uint256 currentPeriod = getCurrentPeriod();
 
         if (_activePeriod.id == 0 && currentPeriod == _activePeriod.timestamp) {
-            // Check if there is an upgrade in queue and update the bribe.
-            _checkForUpgrade(bribeId);
+            // Check if there is an upgrade in queue and update the bounty.
+            _checkForUpgrade(bountyId);
 
             // Initialize reward per token.
             // Only for the first period, and if not already initialized.
-            _updateRewardPerToken(bribeId, currentPeriod, proofData);
+            _updateRewardPerToken(bountyId, currentPeriod, proofData);
         }
 
         // Increase Period
         if (block.timestamp >= _activePeriod.timestamp + _WEEK) {
-            // Check if there is an upgrade in queue and update the bribe.
-            _checkForUpgrade(bribeId);
+            // Check if there is an upgrade in queue and update the bounty.
+            _checkForUpgrade(bountyId);
 
             // Roll to next period.
-            _rollOverToNextPeriod(bribeId, currentPeriod, proofData);
+            _rollOverToNextPeriod(bountyId, currentPeriod, proofData);
 
             return currentPeriod;
         }
@@ -541,65 +542,65 @@ contract Platform is Owned, ReentrancyGuard {
         return _activePeriod.timestamp;
     }
 
-    /// @notice Checks for an upgrade and update the bribe.
-    function _checkForUpgrade(uint256 bribeId) internal {
-        Upgrade storage upgradedBribe = upgradeBribeQueue[bribeId];
+    /// @notice Checks for an upgrade and update the bounty.
+    function _checkForUpgrade(uint256 bountyId) internal {
+        Upgrade storage upgradedBounty = upgradeBountyQueue[bountyId];
 
         // Check if there is an upgrade in queue.
-        if (upgradedBribe.totalRewardAmount != 0) {
+        if (upgradedBounty.totalRewardAmount != 0) {
             // Save new values.
-            bribes[bribeId].endTimestamp = upgradedBribe.endTimestamp;
-            bribes[bribeId].numberOfPeriods = upgradedBribe.numberOfPeriods;
-            bribes[bribeId].maxRewardPerVote = upgradedBribe.maxRewardPerVote;
-            bribes[bribeId].totalRewardAmount = upgradedBribe.totalRewardAmount;
+            bounties[bountyId].endTimestamp = upgradedBounty.endTimestamp;
+            bounties[bountyId].numberOfPeriods = upgradedBounty.numberOfPeriods;
+            bounties[bountyId].maxRewardPerVote = upgradedBounty.maxRewardPerVote;
+            bounties[bountyId].totalRewardAmount = upgradedBounty.totalRewardAmount;
 
-            if (activePeriod[bribeId].id == 0) {
-                activePeriod[bribeId].rewardPerPeriod =
-                    upgradedBribe.totalRewardAmount.mulDiv(1, upgradedBribe.numberOfPeriods);
+            if (activePeriod[bountyId].id == 0) {
+                activePeriod[bountyId].rewardPerPeriod =
+                    upgradedBounty.totalRewardAmount.mulDiv(1, upgradedBounty.numberOfPeriods);
             }
 
-            emit BribeDurationIncreased(
-                bribeId, upgradedBribe.numberOfPeriods, upgradedBribe.totalRewardAmount, upgradedBribe.maxRewardPerVote
+            emit BountyDurationIncreased(
+                bountyId, upgradedBounty.numberOfPeriods, upgradedBounty.totalRewardAmount, upgradedBounty.maxRewardPerVote
             );
 
             // Reset the next values.
-            delete upgradeBribeQueue[bribeId];
+            delete upgradeBountyQueue[bountyId];
         }
     }
 
     /// @notice Roll over to next period.
-    /// @param bribeId Bribe ID.
+    /// @param bountyId Bounty ID.
     /// @param currentPeriod Next period timestamp.
-    function _rollOverToNextPeriod(uint256 bribeId, uint256 currentPeriod, ProofData memory proofData) internal {
-        uint8 index = getActivePeriodPerBribe(bribeId);
+    function _rollOverToNextPeriod(uint256 bountyId, uint256 currentPeriod, ProofData memory proofData) internal {
+        uint8 index = getActivePeriodPerBounty(bountyId);
 
-        Bribe storage bribe = bribes[bribeId];
+        Bounty storage bounty = bounties[bountyId];
 
-        uint256 periodsLeft = getPeriodsLeft(bribeId);
+        uint256 periodsLeft = getPeriodsLeft(bountyId);
         uint256 rewardPerPeriod;
 
-        rewardPerPeriod = bribe.totalRewardAmount - amountClaimed[bribeId];
+        rewardPerPeriod = bounty.totalRewardAmount - amountClaimed[bountyId];
 
-        if (bribe.endTimestamp > currentPeriod + _WEEK && periodsLeft > 1) {
+        if (bounty.endTimestamp > currentPeriod + _WEEK && periodsLeft > 1) {
             rewardPerPeriod = rewardPerPeriod.mulDiv(1, periodsLeft);
         }
 
         // Get adjusted slope without blacklisted addresses.
-        uint256 gaugeBias = _getAdjustedBias(bribe.gauge, bribe.blacklist, currentPeriod, proofData);
+        uint256 gaugeBias = _getAdjustedBias(bounty.gauge, bounty.blacklist, currentPeriod, proofData);
 
-        rewardPerVote[bribeId] = rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
-        activePeriod[bribeId] = Period(index, currentPeriod, rewardPerPeriod);
+        rewardPerVote[bountyId] = rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
+        activePeriod[bountyId] = Period(index, currentPeriod, rewardPerPeriod);
 
-        emit PeriodRolledOver(bribeId, index, currentPeriod, rewardPerPeriod);
+        emit PeriodRolledOver(bountyId, index, currentPeriod, rewardPerPeriod);
     }
 
-    /// @notice Update the amount of reward per token for a given bribe.
-    /// @dev This function is only called once per Bribe.
-    function _updateRewardPerToken(uint256 bribeId, uint256 currentPeriod, ProofData memory proofData) internal {
-        if (rewardPerVote[bribeId] == 0) {
+    /// @notice Update the amount of reward per token for a given bounty.
+    /// @dev This function is only called once per Bounty.
+    function _updateRewardPerToken(uint256 bountyId, uint256 currentPeriod, ProofData memory proofData) internal {
+        if (rewardPerVote[bountyId] == 0) {
             uint256 gaugeBias =
-                _getAdjustedBias(bribes[bribeId].gauge, bribes[bribeId].blacklist, currentPeriod, proofData);
-            rewardPerVote[bribeId] = activePeriod[bribeId].rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
+                _getAdjustedBias(bounties[bountyId].gauge, bounties[bountyId].blacklist, currentPeriod, proofData);
+            rewardPerVote[bountyId] = activePeriod[bountyId].rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
         }
     }
 
@@ -609,48 +610,48 @@ contract Platform is Owned, ReentrancyGuard {
 
     // /// @notice Get an estimate of the reward amount for a given user.
     // /// @param user Address of the user.
-    // /// @param bribeId ID of the bribe.
+    // /// @param bountyId ID of the bounty.
     // /// @return amount of rewards.
     /// Mainly used for UI.
-    function claimable(uint256 bribeId, ProofData memory proofData) external view returns (uint256 amount) {
-        if (isBlacklisted[bribeId][proofData.user]) return 0;
+    function claimable(uint256 bountyId, ProofData memory proofData) external view returns (uint256 amount) {
+        if (isBlacklisted[bountyId][proofData.user]) return 0;
         // Update if needed the current period.
         uint256 currentPeriod = getCurrentPeriod();
 
         if (currentPeriod != gaugeController.activePeriod()) return 0;
 
-        Bribe memory bribe = bribes[bribeId];
-        Upgrade storage upgradedBribe = upgradeBribeQueue[bribeId];
+        Bounty memory bounty = bounties[bountyId];
+        Upgrade storage upgradedBounty = upgradeBountyQueue[bountyId];
 
-        // End timestamp of the bribe.
-        uint256 endTimestamp = FixedPointMathLib.max(bribe.endTimestamp, upgradedBribe.endTimestamp);
+        // End timestamp of the bounty.
+        uint256 endTimestamp = FixedPointMathLib.max(bounty.endTimestamp, upgradedBounty.endTimestamp);
 
         uint256 lastVote;
         IGaugeControllerOracle.Point memory gaugeBias;
         IGaugeControllerOracle.VotedSlope memory userSlope;
 
         (gaugeBias, userSlope, lastVote,) =
-            gaugeController.extractProofState(proofData.user, bribe.gauge, proofData.headerRlp, proofData.userProofRlp);
+            gaugeController.extractProofState(proofData.user, bounty.gauge, proofData.headerRlp, proofData.userProofRlp);
 
         if (
-            userSlope.slope == 0 || lastUserClaim[proofData.user][bribeId] >= currentPeriod
-                || currentPeriod >= userSlope.end || currentPeriod <= lastVote || currentPeriod >= bribe.endTimestamp
+            userSlope.slope == 0 || lastUserClaim[proofData.user][bountyId] >= currentPeriod
+                || currentPeriod >= userSlope.end || currentPeriod <= lastVote || currentPeriod >= bounty.endTimestamp
                 || currentPeriod != getCurrentPeriod()
         ) return 0;
 
-        uint256 _rewardPerVote = rewardPerVote[bribeId];
+        uint256 _rewardPerVote = rewardPerVote[bountyId];
         // If period updated.
-        if (_rewardPerVote == 0 || (_rewardPerVote > 0 && getActivePeriod(bribeId).timestamp != currentPeriod)) {
+        if (_rewardPerVote == 0 || (_rewardPerVote > 0 && getActivePeriod(bountyId).timestamp != currentPeriod)) {
             uint256 _rewardPerPeriod;
 
-            if (upgradedBribe.numberOfPeriods != 0) {
+            if (upgradedBounty.numberOfPeriods != 0) {
                 // Update max reward per vote.
-                bribe.maxRewardPerVote = upgradedBribe.maxRewardPerVote;
-                bribe.totalRewardAmount = upgradedBribe.totalRewardAmount;
+                bounty.maxRewardPerVote = upgradedBounty.maxRewardPerVote;
+                bounty.totalRewardAmount = upgradedBounty.totalRewardAmount;
             }
 
             uint256 periodsLeft = endTimestamp > currentPeriod ? (endTimestamp - currentPeriod) / _WEEK : 0;
-            _rewardPerPeriod = bribe.totalRewardAmount - amountClaimed[bribeId];
+            _rewardPerPeriod = bounty.totalRewardAmount - amountClaimed[bountyId];
 
             if (endTimestamp > currentPeriod + _WEEK && periodsLeft > 1) {
                 _rewardPerPeriod = _rewardPerPeriod.mulDiv(1, periodsLeft);
@@ -659,8 +660,8 @@ contract Platform is Owned, ReentrancyGuard {
             _rewardPerVote = _rewardPerPeriod.mulDiv(
                 _BASE_UNIT,
                 // Get Adjusted Slope without blacklisted addresses weight or just weight if not set yet.
-                gaugeAdjustedBias[bribe.gauge][gaugeController.last_eth_block_number()] > 0
-                    ? gaugeAdjustedBias[bribe.gauge][gaugeController.last_eth_block_number()]
+                gaugeAdjustedBias[bounty.gauge][gaugeController.last_eth_block_number()] > 0
+                    ? gaugeAdjustedBias[bounty.gauge][gaugeController.last_eth_block_number()]
                     : gaugeBias.bias
             );
         }
@@ -671,13 +672,13 @@ contract Platform is Owned, ReentrancyGuard {
         amount = _bias.mulWad(_rewardPerVote);
         // Compute the reward amount based on
         // the max price to pay.
-        uint256 _amountWithMaxPrice = _bias.mulWad(bribe.maxRewardPerVote);
+        uint256 _amountWithMaxPrice = _bias.mulWad(bounty.maxRewardPerVote);
         // Distribute the _min between the amount based on votes, and price.
         amount = FixedPointMathLib.min(amount, _amountWithMaxPrice);
 
         // Update the amount claimed.
-        if (amount + amountClaimed[bribeId] > bribe.totalRewardAmount) {
-            amount = bribe.totalRewardAmount - amountClaimed[bribeId];
+        if (amount + amountClaimed[bountyId] > bounty.totalRewardAmount) {
+            amount = bounty.totalRewardAmount - amountClaimed[bountyId];
         }
         // Substract fees.
         if (fee != 0) {
@@ -771,80 +772,83 @@ contract Platform is Owned, ReentrancyGuard {
     /// --- MANAGEMENT LOGIC
     ///////////////////////////////////////////////////////////////
 
-    /// @notice Increase Bribe duration.
-    /// @param _bribeId ID of the bribe.
+    /// @notice Increase Bounty duration.
+    /// @param _bountyId ID of the bounty.
     /// @param _additionnalPeriods Number of periods to add.
     /// @param _increasedAmount Total reward amount to add.
     /// @param _newMaxPricePerVote Total reward amount to add.
-    function increaseBribeDuration(
-        uint256 _bribeId,
+    function increaseBountyDuration(
+        uint256 _bountyId,
         uint8 _additionnalPeriods,
         uint256 _increasedAmount,
         uint256 _newMaxPricePerVote
-    ) external nonReentrant notKilled onlyManager(_bribeId) {
-        if (!isUpgradeable[_bribeId]) revert NOT_UPGRADEABLE();
-        if (getPeriodsLeft(_bribeId) < 1) revert NO_PERIODS_LEFT();
+    ) external nonReentrant notKilled onlyManager(_bountyId) {
+        if (!isUpgradeable[_bountyId]) revert NOT_UPGRADEABLE();
+        if (getPeriodsLeft(_bountyId) < 1) revert NO_PERIODS_LEFT();
         if (_increasedAmount == 0 || _newMaxPricePerVote == 0) {
             revert WRONG_INPUT();
         }
 
-        Bribe storage bribe = bribes[_bribeId];
-        Upgrade memory upgradedBribe = upgradeBribeQueue[_bribeId];
+        Bounty storage bounty = bounties[_bountyId];
+        Upgrade memory upgradedBounty = upgradeBountyQueue[_bountyId];
 
-        SafeTransferLib.safeTransferFrom(bribe.rewardToken, msg.sender, address(this), _increasedAmount);
+        SafeTransferLib.safeTransferFrom(bounty.rewardToken, msg.sender, address(this), _increasedAmount);
 
-        if (upgradedBribe.totalRewardAmount != 0) {
-            upgradedBribe = Upgrade({
-                numberOfPeriods: upgradedBribe.numberOfPeriods + _additionnalPeriods,
-                totalRewardAmount: upgradedBribe.totalRewardAmount + _increasedAmount,
+        if (upgradedBounty.totalRewardAmount != 0) {
+            upgradedBounty = Upgrade({
+                numberOfPeriods: upgradedBounty.numberOfPeriods + _additionnalPeriods,
+                totalRewardAmount: upgradedBounty.totalRewardAmount + _increasedAmount,
                 maxRewardPerVote: _newMaxPricePerVote,
-                endTimestamp: upgradedBribe.endTimestamp + (_additionnalPeriods * _WEEK)
+                endTimestamp: upgradedBounty.endTimestamp + (_additionnalPeriods * _WEEK)
             });
         } else {
-            upgradedBribe = Upgrade({
-                numberOfPeriods: bribe.numberOfPeriods + _additionnalPeriods,
-                totalRewardAmount: bribe.totalRewardAmount + _increasedAmount,
+            upgradedBounty = Upgrade({
+                numberOfPeriods: bounty.numberOfPeriods + _additionnalPeriods,
+                totalRewardAmount: bounty.totalRewardAmount + _increasedAmount,
                 maxRewardPerVote: _newMaxPricePerVote,
-                endTimestamp: bribe.endTimestamp + (_additionnalPeriods * _WEEK)
+                endTimestamp: bounty.endTimestamp + (_additionnalPeriods * _WEEK)
             });
         }
 
-        upgradeBribeQueue[_bribeId] = upgradedBribe;
+        upgradeBountyQueue[_bountyId] = upgradedBounty;
 
-        emit BribeDurationIncreaseQueued(
-            _bribeId, upgradedBribe.numberOfPeriods, upgradedBribe.totalRewardAmount, _newMaxPricePerVote
+        emit BountyDurationIncreaseQueued(
+            _bountyId, upgradedBounty.numberOfPeriods, upgradedBounty.totalRewardAmount, _newMaxPricePerVote
         );
     }
 
-    /// @notice Close Bribe if there is remaining.
-    /// @param bribeId ID of the bribe to close.
-    function closeBribe(uint256 bribeId) external nonReentrant onlyManager(bribeId) {
+    /// @notice Close Bounty if there is remaining.
+    /// @param bountyId ID of the bounty to close.
+    function closeBounty(uint256 bountyId) external nonReentrant {
         // Check if the currentPeriod is the last one.
         // If not, we can increase the duration.
-        Bribe storage bribe = bribes[bribeId];
+        Bounty storage bounty = bounties[bountyId];
+        if (bounty.manager == address(0)) revert ALREADY_CLOSED();
 
-        if (getCurrentPeriod() >= bribe.endTimestamp || isKilled) {
+        if (getCurrentPeriod() >= bounty.endTimestamp || isKilled) {
             uint256 leftOver;
-            Upgrade memory upgradedBribe = upgradeBribeQueue[bribeId];
-            if (upgradedBribe.totalRewardAmount != 0) {
-                leftOver = upgradedBribe.totalRewardAmount - amountClaimed[bribeId];
-                delete upgradeBribeQueue[bribeId];
-            } else {
-                leftOver = bribes[bribeId].totalRewardAmount - amountClaimed[bribeId];
-            }
-            // Transfer the left over to the owner.
-            SafeTransferLib.safeTransfer(bribe.rewardToken, bribe.manager, leftOver);
-            delete bribes[bribeId].manager;
+            Upgrade memory upgradedBounty = upgradeBountyQueue[bountyId];
 
-            emit BribeClosed(bribeId, leftOver);
+            if (upgradedBounty.totalRewardAmount != 0) {
+                leftOver = upgradedBounty.totalRewardAmount - amountClaimed[bountyId];
+                delete upgradeBountyQueue[bountyId];
+            } else {
+                leftOver = bounties[bountyId].totalRewardAmount - amountClaimed[bountyId];
+            }
+
+            // Transfer the left over to the owner.
+            SafeTransferLib.safeTransfer(bounty.rewardToken, bounty.manager, leftOver);
+            delete bounties[bountyId].manager;
+
+            emit BountyClosed(bountyId, leftOver);
         }
     }
 
-    /// @notice Update Bribe Manager.
-    /// @param bribeId ID of the bribe.
+    /// @notice Update Bounty Manager.
+    /// @param bountyId ID of the bounty.
     /// @param newManager Address of the new manager.
-    function updateManager(uint256 bribeId, address newManager) external onlyManager(bribeId) {
-        emit ManagerUpdated(bribeId, bribes[bribeId].manager = newManager);
+    function updateManager(uint256 bountyId, address newManager) external onlyManager(bountyId) {
+        emit ManagerUpdated(bountyId, bounties[bountyId].manager = newManager);
     }
 
     ////////////////////////////////////////////////////////////////
@@ -853,7 +857,7 @@ contract Platform is Owned, ReentrancyGuard {
 
     /// @notice Claim fees.
     /// @param rewardTokens Array of reward tokens.
-    function claimFees(address[] calldata rewardTokens) external {
+    function claimFees(address[] calldata rewardTokens) external nonReentrant {
         uint256 _feeAccrued;
         uint256 length = rewardTokens.length;
 
@@ -918,49 +922,49 @@ contract Platform is Owned, ReentrancyGuard {
     /// --- UTILS FUNCTIONS
     ///////////////////////////////////////////////////////////////
 
-    /// @notice Returns the number of periods left for a given bribe.
-    /// @param bribeId ID of the bribe.
-    function getPeriodsLeft(uint256 bribeId) public view returns (uint256 periodsLeft) {
-        Bribe storage bribe = bribes[bribeId];
+    /// @notice Returns the number of periods left for a given bounty.
+    /// @param bountyId ID of the bounty.
+    function getPeriodsLeft(uint256 bountyId) public view returns (uint256 periodsLeft) {
+        Bounty storage bounty = bounties[bountyId];
 
         uint256 currentPeriod = getCurrentPeriod();
-        periodsLeft = bribe.endTimestamp > currentPeriod ? (bribe.endTimestamp - currentPeriod) / _WEEK : 0;
+        periodsLeft = bounty.endTimestamp > currentPeriod ? (bounty.endTimestamp - currentPeriod) / _WEEK : 0;
     }
 
-    /// @notice Return the bribe object for a given ID.
-    /// @param bribeId ID of the bribe.
-    function getBribe(uint256 bribeId) external view returns (Bribe memory) {
-        return bribes[bribeId];
+    /// @notice Return the bounty object for a given ID.
+    /// @param bountyId ID of the bounty.
+    function getBounty(uint256 bountyId) external view returns (Bounty memory) {
+        return bounties[bountyId];
     }
 
-    /// @notice Return the bribe in queue for a given ID.
-    /// @dev Can return an empty bribe if there is no upgrade.
-    /// @param bribeId ID of the bribe.
-    function getUpgradedBribeQueued(uint256 bribeId) external view returns (Upgrade memory) {
-        return upgradeBribeQueue[bribeId];
+    /// @notice Return the bounty in queue for a given ID.
+    /// @dev Can return an empty bounty if there is no upgrade.
+    /// @param bountyId ID of the bounty.
+    function getUpgradedBountyQueued(uint256 bountyId) external view returns (Upgrade memory) {
+        return upgradeBountyQueue[bountyId];
     }
 
-    /// @notice Return the blacklisted addresses of a bribe for a given ID.
-    /// @param bribeId ID of the bribe.
-    function getBlacklistedAddressesForBribe(uint256 bribeId) external view returns (address[] memory) {
-        return bribes[bribeId].blacklist;
+    /// @notice Return the blacklisted addresses of a bounty for a given ID.
+    /// @param bountyId ID of the bounty.
+    function getBlacklistedAddressesForBounty(uint256 bountyId) external view returns (address[] memory) {
+        return bounties[bountyId].blacklist;
     }
 
-    /// @notice Return the active period running of bribe given an ID.
-    /// @param bribeId ID of the bribe.
-    function getActivePeriod(uint256 bribeId) public view returns (Period memory) {
-        return activePeriod[bribeId];
+    /// @notice Return the active period running of bounty given an ID.
+    /// @param bountyId ID of the bounty.
+    function getActivePeriod(uint256 bountyId) public view returns (Period memory) {
+        return activePeriod[bountyId];
     }
 
     /// @notice Return the expected current period id.
-    /// @param bribeId ID of the bribe.
-    function getActivePeriodPerBribe(uint256 bribeId) public view returns (uint8) {
-        Bribe storage bribe = bribes[bribeId];
+    /// @param bountyId ID of the bounty.
+    function getActivePeriodPerBounty(uint256 bountyId) public view returns (uint8) {
+        Bounty storage bounty = bounties[bountyId];
 
         uint256 currentPeriod = getCurrentPeriod();
-        uint256 periodsLeft = bribe.endTimestamp > currentPeriod ? (bribe.endTimestamp - currentPeriod) / _WEEK : 0;
-        // If periodsLeft is superior, then the bribe didn't start yet.
-        return uint8(periodsLeft > bribe.numberOfPeriods ? 0 : bribe.numberOfPeriods - periodsLeft);
+        uint256 periodsLeft = bounty.endTimestamp > currentPeriod ? (bounty.endTimestamp - currentPeriod) / _WEEK : 0;
+        // If periodsLeft is superior, then the bounty didn't start yet.
+        return uint8(periodsLeft > bounty.numberOfPeriods ? 0 : bounty.numberOfPeriods - periodsLeft);
     }
 
     /// @notice Return the current period based on Gauge Controller rounding.
