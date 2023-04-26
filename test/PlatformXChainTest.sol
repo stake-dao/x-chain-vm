@@ -29,7 +29,7 @@ contract PlatformXChainTest is Utils {
     // Main Platform Contract
     Platform internal platform;
 
-    // Bribe Token.
+    // Bounty Token.
     MockERC20 rewardToken;
 
     address internal constant _user = 0x52f541764E6e90eeBc5c21Ff570De0e2D63766B6;
@@ -96,7 +96,7 @@ contract PlatformXChainTest is Utils {
     }
 
     function testSetBlockHash() public {
-        // Create Default Bribe.
+        // Create Default Bounty.
         _gaugeController.checkpoint_gauge(_gauge);
 
         // Build the proof.
@@ -112,7 +112,7 @@ contract PlatformXChainTest is Utils {
     }
 
     function testSetBlockHashAlreadySet() public {
-        // Create Default Bribe.
+        // Create Default Bounty.
         _gaugeController.checkpoint_gauge(_gauge);
 
         // Build the proof.
@@ -132,7 +132,7 @@ contract PlatformXChainTest is Utils {
     }
 
     function testSetBlockHashWithAxelar() public {
-        // Create Default Bribe.
+        // Create Default Bounty.
         _gaugeController.checkpoint_gauge(_gauge);
 
         // Build the proof.
@@ -155,8 +155,8 @@ contract PlatformXChainTest is Utils {
     }
 
     function testClaimBribeWithWhitelistedRecipientNotSet() public {
-        // Create Default Bribe.
-        uint256 _id = _createDefaultBribe(1 weeks);
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
         skip(1 days);
@@ -187,8 +187,8 @@ contract PlatformXChainTest is Utils {
     }
 
     function testClaimBribeWithRecipientSet() public {
-        // Create Default Bribe.
-        uint256 _id = _createDefaultBribe(1 weeks);
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
         skip(1 days);
@@ -230,8 +230,8 @@ contract PlatformXChainTest is Utils {
     }
 
     function testClaimBribeWithWhitelistedRecipientSet() public {
-        // Create Default Bribe.
-        uint256 _id = _createDefaultBribe(1 weeks);
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
         skip(1 days);
@@ -281,8 +281,8 @@ contract PlatformXChainTest is Utils {
     }
 
     function testClaimBribe() public {
-        // Create Default Bribe.
-        uint256 _id = _createDefaultBribe(1 weeks);
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
         skip(1 days);
@@ -324,8 +324,8 @@ contract PlatformXChainTest is Utils {
     }
 
     function testClaimWithBlacklistedAddress() public {
-        // Create Default Bribe.
-        uint256 _id = _createDefaultBribeWithBlacklist(2 weeks);
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBountyWithBlacklist(2 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
         skip(1 days);
@@ -371,8 +371,8 @@ contract PlatformXChainTest is Utils {
     }
 
     function testCloseBribe() public {
-        // Create Default Bribe.
-        uint256 _id = _createDefaultBribe(3 weeks);
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(3 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
         // Build the proof.
@@ -399,7 +399,7 @@ contract PlatformXChainTest is Utils {
         assertEq(claimed, 0);
 
         vm.prank(_user);
-        platform.closeBribe(_id);
+        platform.closeBounty(_id);
         assertEq(rewardToken.balanceOf(_user), 0);
     }
 
@@ -413,23 +413,23 @@ contract PlatformXChainTest is Utils {
         bool upgradeable,
         uint256 numberOfWeeks
     ) internal returns (uint256 _id) {
-        _id = platform.createBribe(
+        _id = platform.createBounty(
             gauge, _user, address(_rewardToken), _numberOfPeriods, _maxRewardPerVote, _amount, _blacklist, upgradeable
         );
-        _overrideBribePeriod(_id, numberOfWeeks);
+        _overrideBountyPeriod(_id, numberOfWeeks);
     }
 
-    function _createDefaultBribe(uint256 numberOfWeeks) internal returns (uint256 _id) {
-        _id = platform.createBribe(_gauge, _user, address(rewardToken), 2, 2e18, _amount, new address[](0), true);
-        //_overrideBribePeriod(_id, numberOfWeeks);
+    function _createDefaultBounty(uint256 numberOfWeeks) internal returns (uint256 _id) {
+        _id = platform.createBounty(_gauge, _user, address(rewardToken), 2, 2e18, _amount, new address[](0), true);
+        //_overrideBountyPeriod(_id, numberOfWeeks);
     }
 
-    function _createDefaultBribeWithBlacklist(uint256 numberOfWeeks) internal returns (uint256 _id) {
+    function _createDefaultBountyWithBlacklist(uint256 numberOfWeeks) internal returns (uint256 _id) {
         address[] memory _blacklist = new address[](1);
         _blacklist[0] = _blacklisted;
 
-        _id = platform.createBribe(_gauge, _user, address(rewardToken), 2, 2e18, _amount, _blacklist, true);
-        //_overrideBribePeriod(_id, numberOfWeeks);
+        _id = platform.createBounty(_gauge, _user, address(rewardToken), 2, 2e18, _amount, _blacklist, true);
+        //_overrideBountyPeriod(_id, numberOfWeeks);
     }
 
     function _getCurrentPeriod() internal view returns (uint256) {
@@ -437,11 +437,11 @@ contract PlatformXChainTest is Utils {
     }
 
     /// Move starting period to current period to avoid issues with calculating proof.
-    function _overrideBribePeriod(uint256 _id, uint256 numberOfWeeks) internal {
+    function _overrideBountyPeriod(uint256 _id, uint256 numberOfWeeks) internal {
         uint256 currentPeriod = _getCurrentPeriod();
-        Platform.Bribe memory _bribe = platform.getBribe(_id);
+        Platform.Bounty memory _bribe = platform.getBounty(_id);
 
-        stdstore.target(address(platform)).sig("bribes(uint256)").with_key(_id).depth(4).checked_write(
+        stdstore.target(address(platform)).sig("bounties(uint256)").with_key(_id).depth(4).checked_write(
             _bribe.endTimestamp - numberOfWeeks
         );
         stdstore.target(address(platform)).sig("activePeriod(uint256)").with_key(_id).depth(1).checked_write(

@@ -29,7 +29,7 @@ Build & Test:
 # Votemarket X-Chain Platform
 
 Votemarket X-Chain uses encoded RLP Proof to verify accuracy of votes accross sidechains. Each week, a block hash is sent from Mainnet to Sidechains, saving the state of Ethereum Chain on
-sidechains. To be able to claim their bribes, users would have to provide Encoded RLP proof of their voting state corresponding to the correct block number / block hash.
+sidechains. To be able to claim their bounties, users would have to provide Encoded RLP proof of their voting state corresponding to the correct block number / block hash.
 
 ## How it works
 

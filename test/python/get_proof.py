@@ -27,6 +27,7 @@ BLOCK_HEADER = (
     "mixHash",
     "nonce",
     "baseFeePerGas",
+    "withdrawalsRoot"
 )
 
 

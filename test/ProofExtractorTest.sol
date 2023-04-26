@@ -6,6 +6,7 @@ import "test/utils/Utils.sol";
 import {GaugeController} from "src/interfaces/GaugeController.sol";
 import {EthereumStateSender} from "src/EthereumStateSender.sol";
 import {CurveGaugeControllerOracle} from "src/CurveGaugeControllerOracle.sol";
+import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
 
 contract ProofExtractorTest is Utils {
     EthereumStateSender sender;
@@ -43,6 +44,14 @@ contract ProofExtractorTest is Utils {
 
         // Submit State to Oracle.
         oracle.submit_state(_user, _gauge, _block_header_rlp, _proof_rlp);
+
+        Verifier.BlockHeader memory block_header = Verifier.parseBlockHeader(_block_header_rlp);
+
+        console.log(_blockNumber);
+        console.log(block_header.number);
+
+        console.logBytes32(block_header.hash);
+        console.logBytes32(_block_hash);
 
         /// Retrive the values from the oracle.
         (uint256 slope, uint256 power, uint256 end) = oracle.voteUserSlope(_blockNumber, _user, _gauge);
