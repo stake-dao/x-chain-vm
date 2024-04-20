@@ -4,6 +4,7 @@
 libs = ["lib"]
 verbosity = 3
 ffi = true
+evm_version = 'cancun'
 
 remappings = [
     "forge-std/=lib/forge-std/src/",
@@ -12,4 +13,5 @@ remappings = [
 ]
 
 [rpc_endpoints]
-mainnet = "https://eth.public-rpc.com"
+mainnet = "https://mainnet.infura.io/v3/${INFURA_KEY}"
+arb = "https://arbitrum-mainnet.infura.io/v3/${INFURA_KEY}"

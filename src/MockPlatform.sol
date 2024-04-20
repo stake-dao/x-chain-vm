@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 /*
 ▄▄▄█████▓ ██░ ██ ▓█████     ██░ ██ ▓█████  ██▀███  ▓█████▄ 
 ▓  ██▒ ▓▒▓██░ ██▒▓█   ▀    ▓██░ ██▒▓█   ▀ ▓██ ▒ ██▒▒██▀ ██▌
@@ -53,9 +53,10 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {IGaugeControllerOracle} from "src/interfaces/IGaugeControllerOracle.sol";
 
-/// @title  Platform
+/// @title  Mock Platform
+/// @dev Do not use in production 
 /// @author Stake DAO
-contract Platform is Owned, ReentrancyGuard {
+contract MockPlatform is Owned, ReentrancyGuard {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
@@ -396,7 +397,9 @@ contract Platform is Owned, ReentrancyGuard {
         // Set Upgradeable status.
         isUpgradeable[newBountyId] = upgradeable;
         // Starting from next period.
-        activePeriod[newBountyId] = Period(0, currentPeriod + _WEEK, rewardPerPeriod);
+        // activePeriod[newBountyId] = Period(0, currentPeriod + _WEEK, rewardPerPeriod);
+        // Starting now (test purposes)
+        activePeriod[newBountyId] = Period(0, currentPeriod, rewardPerPeriod);
 
         // Add the addresses to the blacklist.
         uint256 length = blacklist.length;

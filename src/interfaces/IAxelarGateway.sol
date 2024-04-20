@@ -7,7 +7,6 @@ interface IAxelarGateway {
      * |* Errors *|
      * \*********
      */
-
     error NotSelf();
     error NotProxy();
     error InvalidCodeHash();
@@ -31,7 +30,6 @@ interface IAxelarGateway {
      * |* Events *|
      * \*********
      */
-
     event TokenSent(
         address indexed sender, string destinationChain, string destinationAddress, string symbol, uint256 amount
     );
@@ -91,7 +89,6 @@ interface IAxelarGateway {
      * |* Public Functions *|
      * \*******************
      */
-
     function sendToken(
         string calldata destinationChain,
         string calldata destinationAddress,
@@ -149,7 +146,6 @@ interface IAxelarGateway {
      * |* Getters *|
      * \**********
      */
-
     function authModule() external view returns (address);
 
     function tokenDeployer() external view returns (address);
@@ -179,7 +175,6 @@ interface IAxelarGateway {
      * |* Admin Functions *|
      * \******************
      */
-
     function setTokenMintLimits(string[] calldata symbols, uint256[] calldata limits) external;
 
     function upgrade(address newImplementation, bytes32 newImplementationCodeHash, bytes calldata setupParams)
@@ -190,7 +185,6 @@ interface IAxelarGateway {
      * |* External Functions *|
      * \*********************
      */
-
     function setup(bytes calldata params) external;
 
     function execute(bytes calldata input) external;

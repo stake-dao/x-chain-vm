@@ -17,7 +17,6 @@ contract DeploySideChains is Script, Utils {
     /// Arbitrum Axelar Gateway.
     address internal constant _AXELAR_GATEWAY = 0xe432150cce91c13a887f7D836923d5597adD8E31;
 
-
     Platform platform;
     CurveGaugeControllerOracle oracle;
     AxelarExecutable axelarExecutable;
@@ -32,7 +31,6 @@ contract DeploySideChains is Script, Utils {
         oracle.setAxelarExecutable(address(axelarExecutable));
 
         platform = new Platform(address(oracle), DEPLOYER, DEPLOYER);
-
 
         vm.stopPrank();
     }
