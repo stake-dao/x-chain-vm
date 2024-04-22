@@ -54,7 +54,7 @@ import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {IGaugeControllerOracle} from "src/interfaces/IGaugeControllerOracle.sol";
 
 /// @title  Mock Platform
-/// @dev Do not use in production 
+/// @dev Do not use in production
 /// @author Stake DAO
 contract MockPlatform is Owned, ReentrancyGuard {
     using SafeTransferLib for ERC20;
@@ -469,7 +469,7 @@ contract MockPlatform is Owned, ReentrancyGuard {
 
         if (
             userSlope.slope == 0 || lastUserClaim[proofData.user][_bountyId] >= currentPeriod
-                || currentPeriod >= userSlope.end || currentPeriod <= lastVote || currentPeriod >= bounty.endTimestamp
+                || currentPeriod >= userSlope.end /* currentPeriod <= lastVote || */ || currentPeriod >= bounty.endTimestamp
                 || currentPeriod != getCurrentPeriod()
         ) return 0;
 
@@ -479,6 +479,7 @@ contract MockPlatform is Owned, ReentrancyGuard {
         // Voting Power = userSlope * dt
         // with dt = lock_end - period.
         uint256 _bias = _getAddrBias(userSlope.slope, userSlope.end, currentPeriod);
+
         // Compute the reward amount based on
         // Reward / Total Votes.
         amount = _bias.mulWad(rewardPerVote[_bountyId]);
@@ -641,7 +642,7 @@ contract MockPlatform is Owned, ReentrancyGuard {
 
         if (
             userSlope.slope == 0 || lastUserClaim[proofData.user][bountyId] >= currentPeriod
-                || currentPeriod >= userSlope.end || currentPeriod <= lastVote || currentPeriod >= bounty.endTimestamp
+                || currentPeriod >= userSlope.end /* currentPeriod <= lastVote || */ || currentPeriod >= bounty.endTimestamp
                 || currentPeriod != getCurrentPeriod()
         ) return 0;
 
@@ -674,6 +675,7 @@ contract MockPlatform is Owned, ReentrancyGuard {
 
         // Get user voting power.
         uint256 _bias = _getAddrBias(userSlope.slope, userSlope.end, currentPeriod);
+
         // Estimation of the amount of rewards.
         amount = _bias.mulWad(_rewardPerVote);
         // Compute the reward amount based on

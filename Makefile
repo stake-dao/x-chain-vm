@@ -17,3 +17,5 @@ node:; @anvil --fork-url ${ETH_RPC_URL} --steps-tracing
 
 deploy-mainnet:; @forge script script/DeployMainnet.sol --fork-url ${ETH_RPC_URL} --private-key ${PRIVATEKEY} --broadcast --etherscan-api-key ${ETHERSCAN_KEY} --verify # --resume
 deploy-arbitrum:; @forge script script/DeploySideChains.sol # --fork-url ${ARBITRUM_RPC_URL} # --private-key ${PRIVATEKEY} --broadcast # --etherscan-api-key ${ETHERSCAN_KEY} --verify # --resume
+deploy-mock:; @forge script script/DeployMockArbitrum.sol --rpc-url https://arbitrum.llamarpc.com --private-key ${PRIVATE_KEY} --broadcast --etherscan-api-key ${ARBISCAN_KEY} --chain-id=42161 --verify
+
