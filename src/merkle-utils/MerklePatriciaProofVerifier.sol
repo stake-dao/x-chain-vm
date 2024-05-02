@@ -4,7 +4,7 @@
  * Copied from https://github.com/lorenzb/proveth/blob/c74b20e/onchain/ProvethVerifier.sol
  * with minor performance and code style-related modifications.
  */
-pragma solidity 0.8.17;
+pragma solidity 0.8.20;
 
 import {RLPReader} from "src/merkle-utils/RLPReader.sol";
 
