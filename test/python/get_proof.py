@@ -1,9 +1,13 @@
 import sys, rlp, subprocess
+from typing import Any, Dict
 
 from web3 import Web3
 from eth_abi import encode
 from hexbytes import HexBytes
-from eth_utils import keccak, to_bytes
+from eth_utils import keccak, to_bytes, decode_hex, big_endian_to_int, to_canonical_address, to_int
+from eth_utils.toolz import (
+    merge,
+)
 
 args = sys.argv[1:]
 # Initialize a Web3.py instance
@@ -31,33 +35,12 @@ BLOCK_HEADER = (
     "extraData",
     "mixHash",
     "nonce",
-    "baseFeePerGas",
-    "withdrawalsRoot",
+    "baseFeePerGas",  # added by EIP-1559 and is ignored in legacy headers
+    "withdrawalsRoot",  # added by EIP-4895 and is ignored in legacy headers
+    "blobGasUsed",  # added by EIP-4844 and is ignored in legacy headers
+    "excessBlobGas",  # added by EIP-4844 and is ignored in legacy headers
+    "parentBeaconBlockRoot",  # added by EIP-4788 and is ignored in legacy headers
 )
-"""
-BLOCK_HEADER = (
-    "parentHash",
-    "sha3Uncles",
-    "miner",
-    "stateRoot",
-    "transactionsRoot",
-    "receiptsRoot",
-    "logsBloom",
-    "difficulty",
-    "number",
-    "gasLimit",
-    "gasUsed",
-    "timestamp",
-    "extraData",
-    "mixHash",
-    "nonce",
-    "baseFeePerGas",
-    "withdrawalsRoot",
-    "blobGasUsed",
-    "excessBlobGas",
-    "parentBeaconBlockRoot"
-    )
-    """
 
 
 def generate_proofs(account, proof, block_number):
@@ -73,11 +56,17 @@ def generate_proofs(account, proof, block_number):
 
     toji_output = run_toji("https://eth.llamarpc.com", block_number)
 
+    #print(toji_output)
+
+    #print(keccak(encode_rlp_block(block).hex()))
+    #print("0x" + keccak(encode_rlp_block(block)).hex())
+
+    #raise (Exception("stop"))
+
     parsed_data = parse_toji_output(toji_output)
 
     rlp_encoded_block = parsed_data["RLP Encoded Block Header"]
     rlp_encoded_block = bytes.fromhex(rlp_encoded_block)
-
 
     data = encode(
         ["bytes32", "bytes", "bytes"],

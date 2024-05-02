@@ -274,7 +274,7 @@ contract Platform is Owned, ReentrancyGuard {
     /// @param numberOfPeriods Number of periods.
     /// @param totalRewardAmount Total reward amount.
     /// @param maxRewardPerVote Max reward per vote.
-    event BountyDurationIncreased(
+    event BountyDurationIncrease(
         uint256 id, uint8 numberOfPeriods, uint256 totalRewardAmount, uint256 maxRewardPerVote
     );
 
@@ -312,6 +312,7 @@ contract Platform is Owned, ReentrancyGuard {
     error KILLED();
     error WRONG_INPUT();
     error ZERO_ADDRESS();
+    error INVALID_TOKEN();
     error ALREADY_CLOSED();
     error NOT_UPGRADEABLE();
     error NO_PERIODS_LEFT();
@@ -353,9 +354,15 @@ contract Platform is Owned, ReentrancyGuard {
         address[] calldata blacklist,
         bool upgradeable
     ) external nonReentrant notKilled returns (uint256 newBountyId) {
-        if (rewardToken == address(0)) revert ZERO_ADDRESS();
         if (numberOfPeriods < MINIMUM_PERIOD) revert INVALID_NUMBER_OF_PERIODS();
         if (totalRewardAmount == 0 || maxRewardPerVote == 0) revert WRONG_INPUT();
+        if (rewardToken == address(0) || manager == address(0)) revert ZERO_ADDRESS();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(rewardToken)
+        }
+        if (size == 0) revert INVALID_TOKEN();
 
         // Transfer the rewards to the contracts.
         SafeTransferLib.safeTransferFrom(rewardToken, msg.sender, address(this), totalRewardAmount);
@@ -467,7 +474,7 @@ contract Platform is Owned, ReentrancyGuard {
         if (
             userSlope.slope == 0 || lastUserClaim[proofData.user][_bountyId] >= currentPeriod
                 || currentPeriod >= userSlope.end || currentPeriod <= lastVote || currentPeriod >= bounty.endTimestamp
-                || currentPeriod != getCurrentPeriod()
+                || currentPeriod != getCurrentPeriod() || amountClaimed[_bountyId] == bounty.totalRewardAmount
         ) return 0;
 
         // Update User last claim period.
@@ -519,7 +526,7 @@ contract Platform is Owned, ReentrancyGuard {
 
         uint256 currentPeriod = getCurrentPeriod();
 
-        if (_activePeriod.id == 0 && currentPeriod == _activePeriod.timestamp) {
+        if (_activePeriod.id == 0 && currentPeriod == _activePeriod.timestamp && rewardPerVote[bountyId] == 0) {
             // Check if there is an upgrade in queue and update the bounty.
             _checkForUpgrade(bountyId);
 
@@ -559,7 +566,7 @@ contract Platform is Owned, ReentrancyGuard {
                     upgradedBounty.totalRewardAmount.mulDiv(1, upgradedBounty.numberOfPeriods);
             }
 
-            emit BountyDurationIncreased(
+            emit BountyDurationIncrease(
                 bountyId,
                 upgradedBounty.numberOfPeriods,
                 upgradedBounty.totalRewardAmount,
@@ -603,7 +610,10 @@ contract Platform is Owned, ReentrancyGuard {
         if (rewardPerVote[bountyId] == 0) {
             uint256 gaugeBias =
                 _getAdjustedBias(bounties[bountyId].gauge, bounties[bountyId].blacklist, currentPeriod, proofData);
-            rewardPerVote[bountyId] = activePeriod[bountyId].rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
+
+            if (gaugeBias != 0) {
+                rewardPerVote[bountyId] = activePeriod[bountyId].rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
+            }
         }
     }
 
@@ -624,6 +634,8 @@ contract Platform is Owned, ReentrancyGuard {
         if (currentPeriod != gaugeController.activePeriod()) return 0;
 
         Bounty memory bounty = bounties[bountyId];
+
+        // If there is an upgrade in progress but period hasn't been rolled over yet.
         Upgrade storage upgradedBounty = upgradeBountyQueue[bountyId];
 
         // End timestamp of the bounty.
@@ -639,7 +651,8 @@ contract Platform is Owned, ReentrancyGuard {
         if (
             userSlope.slope == 0 || lastUserClaim[proofData.user][bountyId] >= currentPeriod
                 || currentPeriod >= userSlope.end || currentPeriod <= lastVote || currentPeriod >= bounty.endTimestamp
-                || currentPeriod != getCurrentPeriod()
+                || currentPeriod < getActivePeriod(bountyId).timestamp
+                || amountClaimed[bountyId] >= bounty.totalRewardAmount
         ) return 0;
 
         uint256 _rewardPerVote = rewardPerVote[bountyId];
@@ -679,9 +692,11 @@ contract Platform is Owned, ReentrancyGuard {
         // Distribute the _min between the amount based on votes, and price.
         amount = FixedPointMathLib.min(amount, _amountWithMaxPrice);
 
+        uint256 _amountClaimed = amountClaimed[bountyId];
+
         // Update the amount claimed.
-        if (amount + amountClaimed[bountyId] > bounty.totalRewardAmount) {
-            amount = bounty.totalRewardAmount - amountClaimed[bountyId];
+        if (amount + _amountClaimed > bounty.totalRewardAmount) {
+            amount = bounty.totalRewardAmount - _amountClaimed;
         }
         // Substract fees.
         if (fee != 0) {
@@ -828,6 +843,9 @@ contract Platform is Owned, ReentrancyGuard {
         Bounty storage bounty = bounties[bountyId];
         if (bounty.manager == address(0)) revert ALREADY_CLOSED();
 
+        // Check if there is an upgrade in queue and update the bounty.
+        _checkForUpgrade(bountyId);
+
         if (getCurrentPeriod() >= bounty.endTimestamp || isKilled) {
             uint256 leftOver;
             Upgrade memory upgradedBounty = upgradeBountyQueue[bountyId];
@@ -851,6 +869,7 @@ contract Platform is Owned, ReentrancyGuard {
     /// @param bountyId ID of the bounty.
     /// @param newManager Address of the new manager.
     function updateManager(uint256 bountyId, address newManager) external onlyManager(bountyId) {
+        if (newManager == address(0)) revert ZERO_ADDRESS();
         emit ManagerUpdated(bountyId, bounties[bountyId].manager = newManager);
     }
 
@@ -887,6 +906,7 @@ contract Platform is Owned, ReentrancyGuard {
     /// @notice Set the platform fee.
     /// @param _platformFee Platform fee.
     function setPlatformFee(uint256 _platformFee) external onlyOwner {
+        if (_platformFee > 1e18) revert WRONG_INPUT();
         fee = _platformFee;
 
         emit FeeUpdated(_platformFee);
@@ -949,7 +969,7 @@ contract Platform is Owned, ReentrancyGuard {
 
     /// @notice Return the blacklisted addresses of a bounty for a given ID.
     /// @param bountyId ID of the bounty.
-    function getBlacklistedAddressesForBounty(uint256 bountyId) external view returns (address[] memory) {
+    function getBlacklistedAddressesPerBounty(uint256 bountyId) external view returns (address[] memory) {
         return bounties[bountyId].blacklist;
     }
 
@@ -984,11 +1004,11 @@ contract Platform is Owned, ReentrancyGuard {
         pure
         returns (uint256)
     {
-        if (currentPeriod + _WEEK >= endLockTime) return 0;
+        if (currentPeriod >= endLockTime) return 0;
         return userSlope * (endLockTime - currentPeriod);
     }
 
     function getVersion() external pure returns (string memory) {
-        return "2.1.0";
+        return "2.4.0";
     }
 }

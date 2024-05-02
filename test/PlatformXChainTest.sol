@@ -33,8 +33,8 @@ contract PlatformXChainTest is Utils {
     MockERC20 rewardToken;
 
     address internal constant _user = 0x52f541764E6e90eeBc5c21Ff570De0e2D63766B6;
-    address internal constant _gauge = 0x1cEBdB0856dd985fAe9b8fEa2262469360B8a3a6;
-    address internal constant _blacklisted = 0x425d16B0e08a28A3Ff9e4404AE99D78C0a076C5A;
+    address internal constant _gauge = 0x26F7786de3E6D9Bd37Fcf47BE6F2bC455a21b74A;
+    address internal constant _blacklisted = 0xecdED8b1c603cF21299835f1DFBE37f10F2a29Af;
     address internal constant _deployer = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;
 
     AxelarGateway internal _gateway;
@@ -45,7 +45,7 @@ contract PlatformXChainTest is Utils {
     uint256 internal constant _amount = 10_000e18;
 
     function setUp() public {
-        uint256 forkId = vm.createFork("https://eth.public-rpc.com", 16531627); // February 1st
+        uint256 forkId = vm.createFork("https://eth.public-rpc.com", 19728000); // Wednesday 24
         vm.selectFork(forkId);
 
         _gateway = new AxelarGateway();
@@ -164,7 +164,7 @@ contract PlatformXChainTest is Utils {
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 16538627; // 2 of February
+        _blockNumber = 19730772; // Thursday (first day of period)
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -196,7 +196,7 @@ contract PlatformXChainTest is Utils {
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 16538627;
+        _blockNumber = 19730772; // Thursday (first day of period)
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -239,7 +239,7 @@ contract PlatformXChainTest is Utils {
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 16538627;
+        _blockNumber = 19730772; // Thursday (first day of period)
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -290,7 +290,7 @@ contract PlatformXChainTest is Utils {
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 16538627;
+        _blockNumber = 19730772; // Thursday (first day of period)
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -337,7 +337,7 @@ contract PlatformXChainTest is Utils {
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 16538627;
+        _blockNumber = 19730772; // Thursday (first day of period)
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
@@ -378,7 +378,7 @@ contract PlatformXChainTest is Utils {
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 16538627;
+        _blockNumber = 19730772; // Thursday (first day of period)
 
         // Get RLP Encoded proofs.
         (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
