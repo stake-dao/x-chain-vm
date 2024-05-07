@@ -8,12 +8,14 @@ import {EthereumStateSender} from "src/EthereumStateSender.sol";
 contract DeploySideChains is Script {
     EthereumStateSender sender;
 
-    address internal constant DEPLOYER = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;
+    address internal constant DEPLOYER = 0x8898502BA35AB64b3562aBC509Befb7Eb178D4df;
 
     function run() public {
         vm.startBroadcast(DEPLOYER);
 
         sender = new EthereumStateSender(DEPLOYER);
+
+        // Setting the receiver contract as Axelar Executable (on Arbitrum)
 
         vm.stopBroadcast();
     }

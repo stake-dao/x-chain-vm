@@ -6,7 +6,7 @@ on:
   pull_request:
 
 env:
-  FOUNDRY_ETH_RPC_URL: https://mainnet.infura.io/v3/b5dc2199e2254c10b4bd4a39b78a7e89
+  INFURA_KEY: ${{ secrets.INFURA_KEY }}
 
 jobs:
   run-ci:
@@ -25,9 +25,18 @@ jobs:
         with:
           version: nightly
 
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      - name: Install toji
+        run: cargo install --git https://github.com/rkdud007/toji --locked --force
+
       - name: Install deps
         run: forge install
 
       - name: Run tests
         run: forge test
-      

@@ -9,6 +9,7 @@ contract EthereumStateSender {
     using LibString for address;
 
     error ONLY_ADMIN();
+    error ALREADY_SENT();
     error VALUE_TOO_LOW();
 
     address public admin;
@@ -21,7 +22,7 @@ contract EthereumStateSender {
 
     mapping(uint256 => uint256) public blockNumbers;
     mapping(uint256 => bytes32) public blockHashes;
-    mapping(uint256 => mapping(string => uint256)) public destinationChains;
+    mapping(uint256 => mapping(string => mapping(address => uint256))) public destinationChains; // period => chain => contract => count
 
     /// @notice Emitted when a recipient is set
     /// @param _sender The sender of the transaction
@@ -33,7 +34,10 @@ contract EthereumStateSender {
     /// @param _blockNumber The block number
     /// @param _blockHash The block hash
     /// @param _destinationChain The destination chain
-    event BlockhashSent(uint256 indexed _blockNumber, bytes32 _blockHash, string _destinationChain);
+    /// @param _destinationContract The destination contract
+    event BlockhashSent(
+        uint256 indexed _blockNumber, bytes32 _blockHash, string _destinationChain, address _destinationContract
+    );
 
     /// @notice Emitted when a new admin is set
     /// @param _admin The admin address
@@ -58,15 +62,20 @@ contract EthereumStateSender {
         if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
         uint256 currentPeriod = getCurrentPeriod();
 
+        if (
+            blockNumbers[currentPeriod] != 0
+                && destinationChains[currentPeriod][_destinationChain][_destinationContract] != 0
+        ) {
+            revert ALREADY_SENT();
+        }
+
         // Only one submission per period
         if (blockNumbers[currentPeriod] == 0 && currentPeriod + 5 minutes < block.timestamp) {
             blockHashes[currentPeriod] = blockhash(block.number - 1);
             blockNumbers[currentPeriod] = block.number - 1;
         }
 
-        if (blockNumbers[currentPeriod] != 0 && destinationChains[currentPeriod][_destinationChain] == 0) {
-            _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
-        }
+        _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
     }
 
     /// @notice     Send a blockhash to a list of destination chains (it will use the previous block's blockhash)
@@ -115,9 +124,11 @@ contract EthereumStateSender {
 
         IAxelarGateway(AXELAR_GATEWAY).callContract(destinationChain, _destinationContract, payload);
 
-        destinationChains[currentPeriod][destinationChain] += 1;
+        destinationChains[currentPeriod][destinationChain][destinationContract] += 1;
 
-        emit BlockhashSent(blockNumbers[currentPeriod], blockHashes[currentPeriod], destinationChain);
+        emit BlockhashSent(
+            blockNumbers[currentPeriod], blockHashes[currentPeriod], destinationChain, destinationContract
+        );
     }
 
     /// @notice    Set a recipient for a destination chain

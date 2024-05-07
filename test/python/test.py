@@ -1,8 +1,6 @@
 # test_block_encoding.py
 
-import time
-import math
-import json
+import time, os, time, json, math
 from typing import Union, List
 from urllib import request
 from hexbytes.main import HexBytes
@@ -15,8 +13,9 @@ from rlp.sedes import (
     binary,
 )
 from web3 import Web3
+from dotenv import load_dotenv
 
-
+load_dotenv()
 
 # Define the block header classes
 address = Binary.fixed_length(20, allow_empty=True)
@@ -103,7 +102,7 @@ def fetch_blocks_from_rpc_no_async(range_from: int, range_till: int, rpc_url: st
 
 # Test function
 def test_block_encoding():
-    rpc_url = "https://mainnet.infura.io/v3/b5dc2199e2254c10b4bd4a39b78a7e89"
+    rpc_url = "https://mainnet.infura.io/v3/"+ os.getenv("INFURA_KEY")
     block_number_start = 19710129
     block_number_end = 19710129
 

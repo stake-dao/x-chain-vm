@@ -1,18 +1,16 @@
-import sys, rlp, subprocess
-from typing import Any, Dict
+import os, sys, rlp, subprocess
 
 from web3 import Web3
 from eth_abi import encode
+from dotenv import load_dotenv
 from hexbytes import HexBytes
-from eth_utils import keccak, to_bytes, decode_hex, big_endian_to_int, to_canonical_address, to_int
-from eth_utils.toolz import (
-    merge,
-)
+
+load_dotenv()
 
 args = sys.argv[1:]
 # Initialize a Web3.py instance
 RPC_URL = (
-    "https://mainnet.infura.io/v3/b5dc2199e2254c10b4bd4a39b78a7e89"
+    "https://mainnet.infura.io/v3/" + os.getenv("INFURA_KEY")
     if args[0] == "mainnet"
     else "http://localhost:8545"
 )
