@@ -26,6 +26,29 @@ Build & Test:
     forge test
 ```
 
+## Dependency for Generating/Encoding RLP Proofs
+
+### toji CLI Tool
+
+The `toji` CLI tool is a Rust-based utility essential for generating and encoding RLP (Recursive Length Prefix) proofs, especially in the context of the Ethereum Cancun upgrade. This tool facilitates interactions with EVM-based blockchains by providing capabilities to encode and decode RLP data efficiently.
+
+#### Installation
+
+To use `toji` in this project, you must install it globally on your system. Ensure you have Rust and Cargo installed before proceeding. If not, you can install them from [the official Rust website](https://www.rust-lang.org/tools/install).
+
+Run the following command in your terminal to install `toji` from its GitHub repository:
+
+``` bash
+cargo install --git https://github.com/rkdud007/toji --locked --force
+```
+
+
+This command installs the latest version of `toji`, making it accessible from anywhere in your system.
+
+#### Usage in Python Scripts
+
+Once installed, you can invoke `toji` from your Python scripts using the `subprocess` module.
+
 # Votemarket X-Chain Platform
 
 Votemarket X-Chain uses encoded RLP Proof to verify accuracy of votes accross sidechains. Each week, a block hash is sent from Mainnet to Sidechains, saving the state of Ethereum Chain on
@@ -50,29 +73,3 @@ graph TD
 ```
 
 To get Gauges weight and user vote data, `Platform` contract query the CurveGaugeController Oracle.
-
-
-
-
-## Dependency for Generating/Encoding RLP Proofs
-
-### toji CLI Tool
-
-The `toji` CLI tool is a Rust-based utility essential for generating and encoding RLP (Recursive Length Prefix) proofs, especially in the context of the Ethereum Cancun upgrade. This tool facilitates interactions with EVM-based blockchains by providing capabilities to encode and decode RLP data efficiently.
-
-#### Installation
-
-To use `toji` in this project, you must install it globally on your system. Ensure you have Rust and Cargo installed before proceeding. If not, you can install them from [the official Rust website](https://www.rust-lang.org/tools/install).
-
-Run the following command in your terminal to install `toji` from its GitHub repository:
-
-``` bash
-cargo install --git https://github.com/rkdud007/toji --locked --force
-```
-
-
-This command installs the latest version of `toji`, making it accessible from anywhere in your system.
-
-#### Usage in Python Scripts
-
-Once installed, you can invoke `toji` from your Python scripts using the `subprocess` module.
