@@ -4,6 +4,7 @@ pragma solidity 0.8.20;
 import "test/utils/Utils.sol";
 
 import {Platform} from "src/Platform.sol";
+import {PlatformClaimable} from "src/PlatformClaimable.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {AxelarExecutable} from "src/AxelarExecutable.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -28,6 +29,8 @@ contract PlatformXChainTest is Utils {
 
     // Main Platform Contract
     Platform internal platform;
+
+    PlatformClaimable internal platformClaimable;
 
     // Bounty Token.
     MockERC20 rewardToken;
@@ -58,6 +61,9 @@ contract PlatformXChainTest is Utils {
         oracle.setAxelarExecutable(address(axelarExecutable));
 
         platform = new Platform(address(oracle), address(this), address(this));
+
+        // Claimable (view) platform
+        platformClaimable = new PlatformClaimable(platform, address(oracle));
 
         rewardToken.mint(address(this), _amount);
         rewardToken.approve(address(platform), _amount);
@@ -323,6 +329,54 @@ contract PlatformXChainTest is Utils {
         assertEq(claimed, 0);
     }
 
+    function testClaimable() public {
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        // Deploy a claimable platform
+
+        skip(1 days);
+
+        // Build the proof.
+        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        _blockNumber = 19730772; // Thursday (first day of period)
+
+        // Get RLP Encoded proofs.
+        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
+            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+
+        // Submit ETH Block Hash to Oracle.
+        oracle.setEthBlockHash(_blockNumber, _block_hash);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: _block_header_rlp,
+            userProofRlp: _proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimable = platform.claimable(_id, _proofData);
+        uint256 claimableOnClaimable = platformClaimable.claimable(_id, _proofData);
+        uint256 claimed = platform.claim(_id, _proofData);
+
+        assertGt(claimed, 0);
+        assertGt(claimable, 0);
+        assertEq(claimable, claimableOnClaimable);
+        assertApproxEqRel(claimed, claimable, 1e15);
+
+        assertGt(platform.rewardPerVote(_id), 0);
+
+        claimable = platform.claimable(_id, _proofData);
+        claimableOnClaimable = platformClaimable.claimable(_id, _proofData);
+        claimed = platform.claim(_id, _proofData);
+
+        assertEq(claimable, 0);
+        assertEq(claimed, 0);
+        assertEq(claimableOnClaimable, 0);
+    }
     function testClaimWithBlacklistedAddress() public {
         // Create Default Bounty.
         uint256 _id = _createDefaultBountyWithBlacklist(2 weeks);
