@@ -64,17 +64,15 @@ contract PlatformClaimable is Owned {
 
     IGaugeControllerOracle public gaugeController;
 
-
     ////////////////////////////////////////////////////////////
     /// --- STRUCTS
     ////////////////////////////////////////////////////////////
-    
+
     struct ProofState {
         IGaugeControllerOracle.Point gaugeBias;
         IGaugeControllerOracle.VotedSlope userSlope;
         uint256 lastVote;
     }
-
 
     ////////////////////////////////////////////////////////////////
     /// --- CONSTRUCTOR
@@ -115,8 +113,8 @@ contract PlatformClaimable is Owned {
             gaugeController.extractProofState(proofData.user, bounty.gauge, proofData.headerRlp, proofData.userProofRlp);
         if (
             proofState.userSlope.slope == 0 || platform.lastUserClaim(proofData.user, bountyId) >= currentPeriod
-                || currentPeriod >= proofState.userSlope.end || currentPeriod <= proofState.lastVote || currentPeriod >= endTimestamp
-                || currentPeriod < platform.getActivePeriod(bountyId).timestamp
+                || currentPeriod >= proofState.userSlope.end || currentPeriod <= proofState.lastVote
+                || currentPeriod >= endTimestamp || currentPeriod < platform.getActivePeriod(bountyId).timestamp
                 || platform.amountClaimed(bountyId) >= bounty.totalRewardAmount
         ) return 0;
 

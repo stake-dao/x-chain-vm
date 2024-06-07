@@ -6,7 +6,7 @@ import {LibString} from "solady/utils/LibString.sol";
 import {RLPReader} from "src/merkle-utils/RLPReader.sol";
 import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
 
-contract BalancerGaugeControllerOracle is Owned {
+contract GaugeControllerOracle is Owned {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
     using LibString for address;
@@ -23,11 +23,8 @@ contract BalancerGaugeControllerOracle is Owned {
         uint256 end;
     }
 
-    // Balancer Gauge Controller.
-    address constant GAUGE_CONTROLLER = 0xC128468b7Ce63eA702C1f104D55A2566b13D3ABD;
-
-    // Balancer Gauge Controller hash.
-    bytes32 constant GAUGE_CONTROLLER_HASH = keccak256(abi.encodePacked(GAUGE_CONTROLLER));
+    address public immutable GAUGE_CONTROLLER;
+    bytes32 public immutable GAUGE_CONTROLLER_HASH;
 
     // Genesis ETH blockhash.
     bytes32 constant GENESIS_BLOCKHASH = 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3;
@@ -76,8 +73,11 @@ contract BalancerGaugeControllerOracle is Owned {
 
     event SetRecipient(address indexed _user, address indexed _recipient);
 
-    constructor(address _axelarExecutable) Owned(msg.sender) {
+    constructor(address _axelarExecutable, address _gaugeController) Owned(msg.sender) {
         axelarExecutable = _axelarExecutable;
+        GAUGE_CONTROLLER = _gaugeController;
+        GAUGE_CONTROLLER_HASH = keccak256(abi.encodePacked(GAUGE_CONTROLLER));
+
         emit SetBlockhash(0, _eth_blockhash[0] = GENESIS_BLOCKHASH);
     }
 

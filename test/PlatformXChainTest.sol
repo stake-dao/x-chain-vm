@@ -10,7 +10,7 @@ import {AxelarExecutable} from "src/AxelarExecutable.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {GaugeController} from "src/interfaces/GaugeController.sol";
 import {EthereumStateSender} from "src/EthereumStateSender.sol";
-import {CurveGaugeControllerOracle} from "src/curve/CurveGaugeControllerOracle.sol";
+import {GaugeControllerOracle} from "src/GaugeControllerOracle.sol";
 
 contract AxelarGateway {
     function validateContractCall(bytes32, string calldata, string calldata, bytes32) external pure returns (bool) {
@@ -24,7 +24,7 @@ contract PlatformXChainTest is Utils {
     using stdStorage for StdStorage;
 
     EthereumStateSender sender;
-    CurveGaugeControllerOracle oracle;
+    GaugeControllerOracle oracle;
     AxelarExecutable axelarExecutable;
 
     // Main Platform Contract
@@ -56,7 +56,7 @@ contract PlatformXChainTest is Utils {
 
         sender = new EthereumStateSender(_deployer);
 
-        oracle = new CurveGaugeControllerOracle(address(axelarExecutable));
+        oracle = new GaugeControllerOracle(address(axelarExecutable), address(_gaugeController));
         axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), address(oracle));
         oracle.setAxelarExecutable(address(axelarExecutable));
 
@@ -80,7 +80,7 @@ contract PlatformXChainTest is Utils {
 
         // Random User
         vm.prank(address(0x1));
-        vm.expectRevert(CurveGaugeControllerOracle.NOT_OWNER.selector);
+        vm.expectRevert(GaugeControllerOracle.NOT_OWNER.selector);
         oracle.setRecipient(_user, FAKE_RECIPIENT);
     }
 
@@ -132,7 +132,7 @@ contract PlatformXChainTest is Utils {
 
         assertEq(oracle.activePeriod(), _getCurrentPeriod());
 
-        vm.expectRevert(CurveGaugeControllerOracle.PERIOD_ALREADY_UPDATED.selector);
+        vm.expectRevert(GaugeControllerOracle.PERIOD_ALREADY_UPDATED.selector);
         // Submit ETH Block Hash to Oracle.
         oracle.setEthBlockHash(_blockNumber, _block_hash);
     }
@@ -154,7 +154,7 @@ contract PlatformXChainTest is Utils {
             "",
             "Ethereum",
             address(sender).toHexStringChecksumed(),
-            abi.encodeWithSelector(CurveGaugeControllerOracle.setEthBlockHash.selector, _blockNumber, _block_hash)
+            abi.encodeWithSelector(GaugeControllerOracle.setEthBlockHash.selector, _blockNumber, _block_hash)
         );
 
         assertEq(oracle.activePeriod(), _getCurrentPeriod());
