@@ -4,12 +4,13 @@ pragma solidity 0.8.20;
 import "test/utils/Utils.sol";
 
 import {Platform} from "src/Platform.sol";
+import {PlatformClaimable} from "src/PlatformClaimable.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {AxelarExecutable} from "src/AxelarExecutable.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {GaugeController} from "src/interfaces/GaugeController.sol";
 import {EthereumStateSender} from "src/EthereumStateSender.sol";
-import {CurveGaugeControllerOracle} from "src/CurveGaugeControllerOracle.sol";
+import {GaugeControllerOracle} from "src/GaugeControllerOracle.sol";
 
 contract AxelarGateway {
     function validateContractCall(bytes32, string calldata, string calldata, bytes32) external pure returns (bool) {
@@ -23,11 +24,13 @@ contract PlatformXChainTest is Utils {
     using stdStorage for StdStorage;
 
     EthereumStateSender sender;
-    CurveGaugeControllerOracle oracle;
+    GaugeControllerOracle oracle;
     AxelarExecutable axelarExecutable;
 
     // Main Platform Contract
     Platform internal platform;
+
+    PlatformClaimable internal platformClaimable;
 
     // Bounty Token.
     MockERC20 rewardToken;
@@ -53,11 +56,14 @@ contract PlatformXChainTest is Utils {
 
         sender = new EthereumStateSender(_deployer);
 
-        oracle = new CurveGaugeControllerOracle(address(axelarExecutable));
+        oracle = new GaugeControllerOracle(address(axelarExecutable), address(_gaugeController));
         axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), address(oracle));
         oracle.setAxelarExecutable(address(axelarExecutable));
 
         platform = new Platform(address(oracle), address(this), address(this));
+
+        // Claimable (view) platform
+        platformClaimable = new PlatformClaimable(address(oracle));
 
         rewardToken.mint(address(this), _amount);
         rewardToken.approve(address(platform), _amount);
@@ -74,7 +80,7 @@ contract PlatformXChainTest is Utils {
 
         // Random User
         vm.prank(address(0x1));
-        vm.expectRevert(CurveGaugeControllerOracle.NOT_OWNER.selector);
+        vm.expectRevert(GaugeControllerOracle.NOT_OWNER.selector);
         oracle.setRecipient(_user, FAKE_RECIPIENT);
     }
 
@@ -126,7 +132,7 @@ contract PlatformXChainTest is Utils {
 
         assertEq(oracle.activePeriod(), _getCurrentPeriod());
 
-        vm.expectRevert(CurveGaugeControllerOracle.PERIOD_ALREADY_UPDATED.selector);
+        vm.expectRevert(GaugeControllerOracle.PERIOD_ALREADY_UPDATED.selector);
         // Submit ETH Block Hash to Oracle.
         oracle.setEthBlockHash(_blockNumber, _block_hash);
     }
@@ -148,7 +154,7 @@ contract PlatformXChainTest is Utils {
             "",
             "Ethereum",
             address(sender).toHexStringChecksumed(),
-            abi.encodeWithSelector(CurveGaugeControllerOracle.setEthBlockHash.selector, _blockNumber, _block_hash)
+            abi.encodeWithSelector(GaugeControllerOracle.setEthBlockHash.selector, _blockNumber, _block_hash)
         );
 
         assertEq(oracle.activePeriod(), _getCurrentPeriod());
@@ -321,6 +327,55 @@ contract PlatformXChainTest is Utils {
 
         assertEq(claimable, 0);
         assertEq(claimed, 0);
+    }
+
+    function testClaimable() public {
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        // Deploy a claimable platform
+
+        skip(1 days);
+
+        // Build the proof.
+        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        _blockNumber = 19730772; // Thursday (first day of period)
+
+        // Get RLP Encoded proofs.
+        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
+            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+
+        // Submit ETH Block Hash to Oracle.
+        oracle.setEthBlockHash(_blockNumber, _block_hash);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: _block_header_rlp,
+            userProofRlp: _proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimable = platform.claimable(_id, _proofData);
+        uint256 claimableOnClaimable = platformClaimable.claimable(platform, _id, _proofData);
+        uint256 claimed = platform.claim(_id, _proofData);
+
+        assertGt(claimed, 0);
+        assertGt(claimable, 0);
+        assertEq(claimable, claimableOnClaimable);
+        assertApproxEqRel(claimed, claimable, 1e15);
+
+        assertGt(platform.rewardPerVote(_id), 0);
+
+        claimable = platform.claimable(_id, _proofData);
+        claimableOnClaimable = platformClaimable.claimable(platform, _id, _proofData);
+        claimed = platform.claim(_id, _proofData);
+
+        assertEq(claimable, 0);
+        assertEq(claimed, 0);
+        assertEq(claimableOnClaimable, 0);
     }
 
     function testClaimWithBlacklistedAddress() public {

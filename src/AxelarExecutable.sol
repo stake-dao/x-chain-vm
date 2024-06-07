@@ -13,7 +13,7 @@ contract AxelarExecutable is IAxelarExecutable, Owned {
     error WRONG_SOURCE_CHAIN();
     error WRONG_SOURCE_ADDRESS();
 
-    /// @notice Curve Gauge Controller Oracle.
+    /// @notice Gauge Controller Oracle.
     address public oracle;
 
     /// @notice Ethereum State Sender

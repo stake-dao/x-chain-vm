@@ -5,12 +5,12 @@ import "test/utils/Utils.sol";
 
 import {GaugeController} from "src/interfaces/GaugeController.sol";
 import {EthereumStateSender} from "src/EthereumStateSender.sol";
-import {CurveGaugeControllerOracle} from "src/CurveGaugeControllerOracle.sol";
+import {GaugeControllerOracle} from "src/GaugeControllerOracle.sol";
 import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
 
 contract ProofExtractorTest is Utils {
     EthereumStateSender sender;
-    CurveGaugeControllerOracle oracle;
+    GaugeControllerOracle oracle;
 
     address internal constant _user = 0x52f541764E6e90eeBc5c21Ff570De0e2D63766B6;
     address internal constant _gauge = 0xd8b712d29381748dB89c36BCa0138d7c75866ddF;
@@ -23,7 +23,7 @@ contract ProofExtractorTest is Utils {
         vm.selectFork(forkId);
 
         sender = new EthereumStateSender(_deployer);
-        oracle = new CurveGaugeControllerOracle(address(0));
+        oracle = new GaugeControllerOracle(address(0), _gaugeController);
     }
 
     function testGetProofParams() public {
@@ -44,8 +44,6 @@ contract ProofExtractorTest is Utils {
 
         // Submit State to Oracle.
         oracle.submit_state(_user, _gauge, _block_header_rlp, _proof_rlp);
-
-        Verifier.BlockHeader memory block_header = Verifier.parseBlockHeader(_block_header_rlp);
 
         /// Retrive the values from the oracle.
         (uint256 slope, uint256 power, uint256 end) = oracle.voteUserSlope(_blockNumber, _user, _gauge);
