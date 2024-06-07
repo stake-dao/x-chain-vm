@@ -5,7 +5,7 @@ import "test/utils/Utils.sol";
 
 import {GaugeController} from "src/interfaces/GaugeController.sol";
 import {EthereumStateSender} from "src/EthereumStateSender.sol";
-import {CurveGaugeControllerOracle} from "src/CurveGaugeControllerOracle.sol";
+import {CurveGaugeControllerOracle} from "src/curve/CurveGaugeControllerOracle.sol";
 import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
 
 contract ProofExtractorTest is Utils {

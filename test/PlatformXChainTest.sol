@@ -10,7 +10,7 @@ import {AxelarExecutable} from "src/AxelarExecutable.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {GaugeController} from "src/interfaces/GaugeController.sol";
 import {EthereumStateSender} from "src/EthereumStateSender.sol";
-import {CurveGaugeControllerOracle} from "src/CurveGaugeControllerOracle.sol";
+import {CurveGaugeControllerOracle} from "src/curve/CurveGaugeControllerOracle.sol";
 
 contract AxelarGateway {
     function validateContractCall(bytes32, string calldata, string calldata, bytes32) external pure returns (bool) {
