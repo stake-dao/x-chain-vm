@@ -16,11 +16,10 @@ contract DeploySideChains is Script, Utils {
     function run() public {
         vm.startBroadcast(DEPLOYER);
 
-        PlatformClaimable platformClaimable = new PlatformClaimable(platform, oracle);
+        PlatformClaimable platformClaimable = new PlatformClaimable(oracle);
 
-        assertEq(address(platformClaimable.platform()), address(platform));
         assertEq(address(platformClaimable.gaugeController()), oracle);
-        
+
         vm.stopBroadcast();
     }
 }

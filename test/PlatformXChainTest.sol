@@ -63,7 +63,7 @@ contract PlatformXChainTest is Utils {
         platform = new Platform(address(oracle), address(this), address(this));
 
         // Claimable (view) platform
-        platformClaimable = new PlatformClaimable(platform, address(oracle));
+        platformClaimable = new PlatformClaimable(address(oracle));
 
         rewardToken.mint(address(this), _amount);
         rewardToken.approve(address(platform), _amount);
@@ -359,7 +359,7 @@ contract PlatformXChainTest is Utils {
         });
 
         uint256 claimable = platform.claimable(_id, _proofData);
-        uint256 claimableOnClaimable = platformClaimable.claimable(_id, _proofData);
+        uint256 claimableOnClaimable = platformClaimable.claimable(platform, _id, _proofData);
         uint256 claimed = platform.claim(_id, _proofData);
 
         assertGt(claimed, 0);
@@ -370,13 +370,14 @@ contract PlatformXChainTest is Utils {
         assertGt(platform.rewardPerVote(_id), 0);
 
         claimable = platform.claimable(_id, _proofData);
-        claimableOnClaimable = platformClaimable.claimable(_id, _proofData);
+        claimableOnClaimable = platformClaimable.claimable(platform, _id, _proofData);
         claimed = platform.claim(_id, _proofData);
 
         assertEq(claimable, 0);
         assertEq(claimed, 0);
         assertEq(claimableOnClaimable, 0);
     }
+
     function testClaimWithBlacklistedAddress() public {
         // Create Default Bounty.
         uint256 _id = _createDefaultBountyWithBlacklist(2 weeks);

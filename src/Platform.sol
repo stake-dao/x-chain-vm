@@ -650,7 +650,7 @@ contract Platform is Owned, ReentrancyGuard {
 
         if (
             userSlope.slope == 0 || lastUserClaim[proofData.user][bountyId] >= currentPeriod
-                || currentPeriod >= userSlope.end || currentPeriod <= lastVote || currentPeriod >= bounty.endTimestamp
+                || currentPeriod >= userSlope.end || currentPeriod <= lastVote || currentPeriod >= endTimestamp
                 || currentPeriod < getActivePeriod(bountyId).timestamp
                 || amountClaimed[bountyId] >= bounty.totalRewardAmount
         ) return 0;
