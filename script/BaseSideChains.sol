@@ -36,7 +36,10 @@ abstract contract BaseSideChains is Script, Utils {
 
         oracle = new GaugeControllerOracle(address(0), gaugeController);
 
-        axelarExecutable = new AxelarExecutable(_AXELAR_GATEWAY, ETH_STATE_SENDER, address(oracle));
+        address[] memory oracles = new address[](1);
+        oracles[0] = address(oracle);
+
+        axelarExecutable = new AxelarExecutable(_AXELAR_GATEWAY, ETH_STATE_SENDER, oracles);
         oracle.setAxelarExecutable(address(axelarExecutable));
 
         platform = new Platform(address(oracle), DEPLOYER, DEPLOYER);

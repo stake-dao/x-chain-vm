@@ -24,8 +24,9 @@ contract PlatformXChainTest is Utils {
     using stdStorage for StdStorage;
 
     EthereumStateSender sender;
-    GaugeControllerOracle oracle;
     AxelarExecutable axelarExecutable;
+
+    address[] internal oracles;
 
     // Main Platform Contract
     Platform internal platform;
@@ -56,23 +57,48 @@ contract PlatformXChainTest is Utils {
 
         sender = new EthereumStateSender(_deployer);
 
-        oracle = new GaugeControllerOracle(address(axelarExecutable), address(_gaugeController));
-        axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), address(oracle));
-        oracle.setAxelarExecutable(address(axelarExecutable));
+        oracles = new address[](2);
+        oracles[0] = address(new GaugeControllerOracle(address(axelarExecutable), address(_gaugeController)));
+        oracles[1] = address(new GaugeControllerOracle(address(axelarExecutable), address(_gaugeController)));
 
-        platform = new Platform(address(oracle), address(this), address(this));
+        axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), oracles);
 
-        // Claimable (view) platform
-        platformClaimable = new PlatformClaimable(address(oracle));
+        GaugeControllerOracle(oracles[0]).setAxelarExecutable(address(axelarExecutable));
+        GaugeControllerOracle(oracles[1]).setAxelarExecutable(address(axelarExecutable));
+
+        platform = new Platform(address(oracles[0]), address(this), address(this));
+        platformClaimable = new PlatformClaimable(address(oracles[0]));
 
         rewardToken.mint(address(this), _amount);
         rewardToken.approve(address(platform), _amount);
     }
 
+    function testMultipleOraclesReceivePayload() public {
+        // Build the proof.
+        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        // Get RLP Encoded proofs.
+        (bytes32 _block_hash,,) = getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+
+        assertEq(GaugeControllerOracle(oracles[0]).activePeriod(), 0);
+        assertEq(GaugeControllerOracle(oracles[1]).activePeriod(), 0);
+
+        // Submit ETH Block Hash to Oracle.
+        axelarExecutable.execute(
+            "",
+            "Ethereum",
+            address(sender).toHexStringChecksumed(),
+            abi.encodeWithSelector(GaugeControllerOracle.setEthBlockHash.selector, _blockNumber, _block_hash)
+        );
+
+        assertEq(GaugeControllerOracle(oracles[0]).activePeriod(), _getCurrentPeriod());
+        assertEq(GaugeControllerOracle(oracles[1]).activePeriod(), _getCurrentPeriod());
+    }
+
     function testSetRecipient() public {
         address FAKE_RECIPIENT = address(0xCACA);
-        oracle.setRecipient(_user, FAKE_RECIPIENT);
-        assertEq(oracle.recipient(_user), FAKE_RECIPIENT);
+        GaugeControllerOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
+        assertEq(GaugeControllerOracle(oracles[0]).recipient(_user), FAKE_RECIPIENT);
     }
 
     function testSetRecipientWrongAuth() public {
@@ -81,7 +107,7 @@ contract PlatformXChainTest is Utils {
         // Random User
         vm.prank(address(0x1));
         vm.expectRevert(GaugeControllerOracle.NOT_OWNER.selector);
-        oracle.setRecipient(_user, FAKE_RECIPIENT);
+        GaugeControllerOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
     }
 
     function testWhitelist() public {
@@ -112,9 +138,9 @@ contract PlatformXChainTest is Utils {
         (bytes32 _block_hash,,) = getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        GaugeControllerOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
 
-        assertEq(oracle.activePeriod(), _getCurrentPeriod());
+        assertEq(GaugeControllerOracle(oracles[0]).activePeriod(), _getCurrentPeriod());
     }
 
     function testSetBlockHashAlreadySet() public {
@@ -128,13 +154,13 @@ contract PlatformXChainTest is Utils {
         (bytes32 _block_hash,,) = getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        GaugeControllerOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
 
-        assertEq(oracle.activePeriod(), _getCurrentPeriod());
+        assertEq(GaugeControllerOracle(oracles[0]).activePeriod(), _getCurrentPeriod());
 
         vm.expectRevert(GaugeControllerOracle.PERIOD_ALREADY_UPDATED.selector);
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        GaugeControllerOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
     }
 
     function testSetBlockHashWithAxelar() public {
@@ -147,7 +173,7 @@ contract PlatformXChainTest is Utils {
         // Get RLP Encoded proofs.
         (bytes32 _block_hash,,) = getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
-        assertEq(oracle.activePeriod(), 0);
+        assertEq(GaugeControllerOracle(oracles[0]).activePeriod(), 0);
 
         // Submit ETH Block Hash to Oracle.
         axelarExecutable.execute(
@@ -157,7 +183,7 @@ contract PlatformXChainTest is Utils {
             abi.encodeWithSelector(GaugeControllerOracle.setEthBlockHash.selector, _blockNumber, _block_hash)
         );
 
-        assertEq(oracle.activePeriod(), _getCurrentPeriod());
+        assertEq(GaugeControllerOracle(oracles[0]).activePeriod(), _getCurrentPeriod());
     }
 
     function testClaimBribeWithWhitelistedRecipientNotSet() public {
@@ -177,7 +203,7 @@ contract PlatformXChainTest is Utils {
             getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        GaugeControllerOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
         platform.whitelistAddress(_user, true);
 
         // No need to submit it.
@@ -209,10 +235,10 @@ contract PlatformXChainTest is Utils {
             getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        GaugeControllerOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
 
         address FAKE_RECIPIENT = address(0xCACA);
-        oracle.setRecipient(_user, FAKE_RECIPIENT);
+        GaugeControllerOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
@@ -252,12 +278,12 @@ contract PlatformXChainTest is Utils {
             getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        GaugeControllerOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
 
         platform.whitelistAddress(_user, true);
 
         address FAKE_RECIPIENT = address(0xCACA);
-        oracle.setRecipient(_user, FAKE_RECIPIENT);
+        GaugeControllerOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
@@ -303,7 +329,7 @@ contract PlatformXChainTest is Utils {
             getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        GaugeControllerOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
@@ -348,7 +374,7 @@ contract PlatformXChainTest is Utils {
             getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        GaugeControllerOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
@@ -405,7 +431,7 @@ contract PlatformXChainTest is Utils {
             getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        GaugeControllerOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
 
         bytes[] memory _blacklistedProofs = new bytes[](1);
         _blacklistedProofs[0] = _blacklisted_proof_rlp;
@@ -421,7 +447,8 @@ contract PlatformXChainTest is Utils {
         assertGt(platform.claim(_id, _proofData), 0);
 
         // Get RLP Encoded proofs.
-        (uint256 _slope,, uint256 _bEnd) = oracle.voteUserSlope(_blockNumber, _blacklisted, _gauge);
+        (uint256 _slope,, uint256 _bEnd) =
+            GaugeControllerOracle(oracles[0]).voteUserSlope(_blockNumber, _blacklisted, _gauge);
         assertEq(_bBias, _slope * (_bEnd - _getCurrentPeriod()));
     }
 
@@ -440,7 +467,7 @@ contract PlatformXChainTest is Utils {
             getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        GaugeControllerOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
