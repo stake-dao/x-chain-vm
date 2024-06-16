@@ -6,7 +6,7 @@ import "forge-std/Script.sol";
 
 import {AxelarExecutable} from "src/AxelarExecutable.sol";
 
-abstract contract BaseSideChains is Script, Utils {
+contract DeployAxelarExecutableMulti is Script, Utils {
     address internal constant DEPLOYER = 0x8898502BA35AB64b3562aBC509Befb7Eb178D4df;
     address internal constant ETH_STATE_SENDER = 0xe742141075767106FeD9F6FFA99f07f33bd66312;
 
@@ -22,7 +22,8 @@ abstract contract BaseSideChains is Script, Utils {
     address[] oracles = [CURVE_ORACLE, BALANCER_ORACLE, FRAX_ORACLE, FXN_ORACLE];
 
     function run() public {
-        vm.startBroadcast(DEPLOYER);
+        uint256 pk = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(pk);
         AxelarExecutable axelarExecutable = new AxelarExecutable(_AXELAR_GATEWAY, ETH_STATE_SENDER, oracles);
 
         address oracleA = axelarExecutable.oracles(0);
