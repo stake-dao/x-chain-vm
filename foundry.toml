@@ -12,6 +12,15 @@ remappings = [
     "solady/=lib/solady/src/"
 ]
 
+[etherscan]
+mainnet = { key = "${ETHERSCAN_KEY}" }
+arbitrum = { key = "${ARBISCAN_KEY}" }
+optimism = { key = "${OPTISCAN_KEY}" }
+base = { key = "${BASESCAN_KEY}" }
+
+
 [rpc_endpoints]
 mainnet = "https://mainnet.infura.io/v3/${INFURA_KEY}"
-arb = "https://arbitrum-mainnet.infura.io/v3/${INFURA_KEY}"
+arbitrum = "https://arbitrum-mainnet.infura.io/v3/${INFURA_KEY}"
+optimism = "https://optimism-mainnet.infura.io/v3/${INFURA_KEY}"
+base = "https://base-rpc.publicnode.com	"
