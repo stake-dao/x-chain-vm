@@ -75,22 +75,32 @@ contract EthereumStateSender {
             blockNumbers[currentPeriod] = block.number - 1;
         }
 
-        _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
+        _sendBlockhash(_destinationContract, _destinationChain, currentPeriod, msg.value);
     }
 
-    /// @notice     Send a blockhash to a list of destination chains (it will use the previous block's blockhash)
+    /// @notice     Send a blockhash to a list of destination chains with multiple contracts per chain (it will use the previous block's blockhash)
     /// @param      _destinationChains The destination chains array
-    /// @param      _destinationContracts The destination contracts array
-    function sendBlockhash(string[] calldata _destinationChains, address[] calldata _destinationContracts)
+    /// @param      _destinationContracts The destination contracts array for each chain
+    function sendBlockhash(string[] calldata _destinationChains, address[][] calldata _destinationContracts)
         external
         payable
     {
-        uint256 lenght = _destinationChains.length;
-        if (msg.value < sendBlockHashMinValue * lenght) revert VALUE_TOO_LOW();
-        for (uint256 i; i < lenght;) {
-            sendBlockhash(_destinationChains[i], _destinationContracts[i]);
-            unchecked {
-                ++i;
+        uint256 chainsLength = _destinationChains.length;
+        require(_destinationContracts.length == chainsLength, "MISMATCHED_LENGTHS");
+
+        uint256 totalContracts = 0;
+        for (uint256 i = 0; i < chainsLength; i++) {
+            totalContracts += _destinationContracts[i].length;
+        }
+
+        if (msg.value < sendBlockHashMinValue * totalContracts) revert VALUE_TOO_LOW();
+
+        uint256 valuePerContract = msg.value / totalContracts;
+        uint256 currentPeriod = getCurrentPeriod();
+
+        for (uint256 i = 0; i < chainsLength; i++) {
+            for (uint256 j = 0; j < _destinationContracts[i].length; j++) {
+                _sendBlockhash(_destinationContracts[i][j], _destinationChains[i], currentPeriod, valuePerContract);
             }
         }
     }
@@ -102,23 +112,26 @@ contract EthereumStateSender {
         if (msg.sender != admin) revert ONLY_ADMIN();
         if (msg.value < sendBlockHashMinValue) revert VALUE_TOO_LOW();
         uint256 currentPeriod = getCurrentPeriod();
-        _sendBlockhash(_destinationContract, _destinationChain, currentPeriod);
+        _sendBlockhash(_destinationContract, _destinationChain, currentPeriod, msg.value);
     }
 
     /// @notice     Internal function to send a blockhash to a destination chain
     /// @param      destinationChain The destination chain
     /// @param      destinationContract The destination contract
     /// @param      currentPeriod Current period
-    function _sendBlockhash(address destinationContract, string calldata destinationChain, uint256 currentPeriod)
-        internal
-    {
+    function _sendBlockhash(
+        address destinationContract,
+        string calldata destinationChain,
+        uint256 currentPeriod,
+        uint256 value
+    ) internal {
         string memory _destinationContract = destinationContract.toHexStringChecksumed();
         bytes memory payload = abi.encodeWithSignature(
             "setEthBlockHash(uint256,bytes32)", blockNumbers[currentPeriod], blockHashes[currentPeriod]
         );
         // pay gas in eth
         // the gas in exceed will be reimbursed to the msg.sender
-        IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
+        IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: value}(
             address(this), destinationChain, _destinationContract, payload, msg.sender
         );
 
