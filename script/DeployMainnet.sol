@@ -11,11 +11,15 @@ contract DeploySideChains is Script {
     address internal constant DEPLOYER = 0x8898502BA35AB64b3562aBC509Befb7Eb178D4df;
 
     function run() public {
-        vm.startBroadcast(DEPLOYER);
+        vm.createSelectFork(vm.rpcUrl("mainnet"));
+
+        uint256 pk = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(pk);
 
         sender = new EthereumStateSender(DEPLOYER);
 
         // Setting the receiver contract as Axelar Executable (on Arbitrum)
+
 
         vm.stopBroadcast();
     }

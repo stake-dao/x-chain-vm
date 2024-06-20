@@ -248,4 +248,16 @@ contract GaugeControllerOracle is Owned {
             last_eth_block_number = _eth_block_number;
         }
     }
+
+    function setEthBlockHashEmergency(uint256 _eth_block_number, bytes32 __eth_blockhash) external {
+        if (msg.sender != owner) revert NOT_OWNER();
+
+        uint256 _period = block.timestamp / 1 weeks * 1 weeks;
+
+        _eth_blockhash[_eth_block_number] = __eth_blockhash;
+        activePeriod = _period;
+        emit SetBlockhash(_eth_block_number, __eth_blockhash);
+
+        last_eth_block_number = _eth_block_number;
+    }
 }

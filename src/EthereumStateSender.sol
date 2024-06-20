@@ -9,8 +9,11 @@ contract EthereumStateSender {
     using LibString for address;
 
     error ONLY_ADMIN();
+    error TOO_SOON();
     error ALREADY_SENT();
     error VALUE_TOO_LOW();
+    error NO_DESTINATION_CHAINS();
+    error MISMATCHED_LENGTHS();
 
     address public admin;
 
@@ -74,6 +77,7 @@ contract EthereumStateSender {
             blockHashes[currentPeriod] = blockhash(block.number - 1);
             blockNumbers[currentPeriod] = block.number - 1;
         }
+        else revert TOO_SOON();
 
         _sendBlockhash(_destinationContract, _destinationChain, currentPeriod, msg.value);
     }
@@ -86,7 +90,9 @@ contract EthereumStateSender {
         payable
     {
         uint256 chainsLength = _destinationChains.length;
-        require(_destinationContracts.length == chainsLength, "MISMATCHED_LENGTHS");
+
+        if (chainsLength == 0) revert NO_DESTINATION_CHAINS();
+        if (_destinationContracts.length != chainsLength) revert MISMATCHED_LENGTHS();
 
         uint256 totalContracts = 0;
         for (uint256 i = 0; i < chainsLength; i++) {
@@ -97,6 +103,25 @@ contract EthereumStateSender {
 
         uint256 valuePerContract = msg.value / totalContracts;
         uint256 currentPeriod = getCurrentPeriod();
+
+        // First, iterate, if at least one is already sent, revert
+        for (uint256 i = 0; i < chainsLength; i++) {
+            for (uint256 j = 0; j < _destinationContracts[i].length; j++) {
+                if (
+                    blockNumbers[currentPeriod] != 0
+                        && destinationChains[currentPeriod][_destinationChains[i]][_destinationContracts[i][j]] != 0
+                ) {
+                    revert ALREADY_SENT();
+                }
+            }
+        }
+
+        // Only one submission per period
+        if (blockNumbers[currentPeriod] == 0 && currentPeriod + 5 minutes < block.timestamp) {
+            blockHashes[currentPeriod] = blockhash(block.number - 1);
+            blockNumbers[currentPeriod] = block.number - 1;
+        }
+        else revert TOO_SOON();
 
         for (uint256 i = 0; i < chainsLength; i++) {
             for (uint256 j = 0; j < _destinationContracts[i].length; j++) {
