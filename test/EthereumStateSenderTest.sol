@@ -1,8 +1,7 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+// SPDX-License-Identifier: AGPL-3.0
+pragma solidity 0.8.20;
 
 import "test/utils/Utils.sol";
-
 import {IAxelarGateway} from "../src/interfaces/IAxelarGateway.sol";
 import {IAxelarGasReceiverProxy} from "../src/interfaces/IAxelarGasReceiverProxy.sol";
 import {EthereumStateSender} from "../src/EthereumStateSender.sol";
@@ -16,16 +15,16 @@ contract EthereumStateSenderTest is Utils {
 
     address public constant AXELAR_GATEWAY = 0x4F4495243837681061C4743b74B3eEdf548D56A5;
     address public constant AXELAR_GAS_RECEIVER = 0x2d5d7d31F671F86C782533cc367F14109a082712;
+    address public constant ARB_A = address(0x123);
+    address public constant ARB_B = address(0x456);
+    address public constant BASE_A = address(0x789);
+    address public constant BASE_B = address(0x012);
 
     function setUp() public {
-        // Set current timestamp and block (preventing block(0))
-
         vm.warp(1700000000);
         vm.roll(1000);
 
         ethereumStateSender = new EthereumStateSender(address(this));
-
-        // Replace both real AxelarGateway and AxelarGasReceiver with mocks
         mockAxelarGateway = new MockAxelarGateway();
         mockAxelarGasReceiver = new MockAxelarGasReceiver();
 
@@ -34,160 +33,160 @@ contract EthereumStateSenderTest is Utils {
 
         vm.etch(AXELAR_GATEWAY, axelarMockCode);
         vm.etch(AXELAR_GAS_RECEIVER, axelarGasReceiverMockCode);
+
+        EthereumStateSender.ChainContract[] memory chains = new EthereumStateSender.ChainContract[](2);
+
+        address[] memory arbContracts = new address[](2);
+        arbContracts[0] = ARB_A;
+        arbContracts[1] = ARB_B;
+
+        address[] memory baseContracts = new address[](2);
+        baseContracts[0] = BASE_A;
+        baseContracts[1] = BASE_B;
+
+        ethereumStateSender.addChain("arbitrum", arbContracts);
+        ethereumStateSender.addChain("base", baseContracts);
     }
 
-    function test_sendBlockhashWithSufficientValue() public {
-        uint256 sendValue = ethereumStateSender.sendBlockHashMinValue();
+    function test_InitialState() public {
+        assertEq(ethereumStateSender.governance(), address(this));
+        assertEq(ethereumStateSender.getEnabledContracts(), 4);
+
+        address[] memory arbContracts = new address[](2);
+        arbContracts[0] = ARB_A;
+        arbContracts[1] = ARB_B;
+        validateChain(0, "arbitrum", arbContracts);
+
+        address[] memory baseContracts = new address[](2);
+        baseContracts[0] = BASE_A;
+        baseContracts[1] = BASE_B;
+        validateChain(1, "base", baseContracts);
+    }
+
+    function test_sendBlockHash() public {
+        uint256 sendValue = ethereumStateSender.sendBlockHashMinValue() * ethereumStateSender.getEnabledContracts();
+        vm.deal(address(0xBABA), sendValue);
+        ethereumStateSender.sendBlockHash{value: sendValue}();
+
+        // Check mappings
+        assertEq(ethereumStateSender.blockNumbers(ethereumStateSender.getCurrentPeriod()), block.number - 1);
+        assertEq(ethereumStateSender.blockHashes(ethereumStateSender.getCurrentPeriod()), blockhash(block.number - 1));
+
+        checkPayloadAndDestination(0, ARB_A, "arbitrum", block.number - 1, blockhash(block.number - 1));
+        checkPayloadAndDestination(1, ARB_B, "arbitrum", block.number - 1, blockhash(block.number - 1));
+
+        checkPayloadAndDestination(2, BASE_A, "base", block.number - 1, blockhash(block.number - 1));
+        checkPayloadAndDestination(3, BASE_B, "base", block.number - 1, blockhash(block.number - 1));
+    }
+
+    function testFail_SendWithInsufficientValue() public {
+        uint256 insufficientValue =
+            ethereumStateSender.sendBlockHashMinValue() * ethereumStateSender.getEnabledContracts() - 0.001 ether;
+        vm.expectRevert(bytes("InsufficientValue"));
+        ethereumStateSender.sendBlockHash{value: insufficientValue}();
+
+        vm.expectRevert(bytes("InsufficientValue"));
+        ethereumStateSender.sendBlockHashEmergency{value: insufficientValue}(
+            "arbitrum", new address[](1), block.number, blockhash(block.number - 1)
+        );
+    }
+
+    function testFail_SendTooCloseToCurrentPeriod() public {
+        uint256 currentPeriod = ethereumStateSender.getCurrentPeriod();
+        vm.warp(currentPeriod + 4 minutes);
+        uint256 sufficientValue =
+            ethereumStateSender.sendBlockHashMinValue() * ethereumStateSender.getEnabledContracts();
+        vm.expectRevert(bytes("TooCloseToCurrentPeriod"));
+        ethereumStateSender.sendBlockHash{value: sufficientValue}();
+    }
+
+    function testFail_AddChainNotByGovernance() public {
+        address nonGovernanceUser = address(0xABC);
+        vm.prank(nonGovernanceUser);
+        vm.expectRevert(bytes("GovernanceOnly"));
+        ethereumStateSender.addChain("newChain", new address[](1));
+    }
+
+    function testSendBlockHashEmergency() public {
+        string memory chain = "arbitrum";
+        address[] memory contracts = new address[](2);
+        contracts[0] = address(0xCACA);
+        contracts[1] = address(0xBACA);
+        uint256 blockNumber = block.number - 1;
+        bytes32 blockHash = blockhash(block.number - 1);
+        uint256 sendValue = ethereumStateSender.sendBlockHashMinValue() * contracts.length;
+
+        // Test successful sending
         vm.deal(address(this), sendValue);
+        ethereumStateSender.sendBlockHashEmergency{value: sendValue}(chain, contracts, blockNumber, blockHash);
 
-        ethereumStateSender.sendBlockhash{value: sendValue}("arbitrum", address(0x123));
+        checkPayloadAndDestination(0, address(0xCACA), "arbitrum", block.number - 1, blockhash(block.number - 1));
+        checkPayloadAndDestination(1, address(0xBACA), "arbitrum", block.number - 1, blockhash(block.number - 1));
+    }
 
+    function testSendBlockHashEmergency_AlreadySent() public {
+        string memory chain = "arbitrum";
+        address[] memory contracts = new address[](2);
+        contracts[0] = ARB_A;
+        contracts[1] = ARB_B;
         uint256 blockNumber = block.number - 1;
-        bytes32 blockHash = blockhash(blockNumber);
+        bytes32 blockHash = blockhash(block.number - 1);
+        uint256 sendValue = ethereumStateSender.sendBlockHashMinValue() * contracts.length;
 
-        checkPayloadAndDestination(address(0x123), "arbitrum", blockNumber, blockHash);
-    }
-
-    function test_sendBlockhashWithInsufficientValue() public {
-        vm.expectRevert(EthereumStateSender.VALUE_TOO_LOW.selector);
-        ethereumStateSender.sendBlockhash{value: 0}("arbitrum", address(0x123));
-    }
-
-    function test_sendBlockhashTwiceReverts() public {
-        uint256 sendValue = ethereumStateSender.sendBlockHashMinValue();
-        ethereumStateSender.sendBlockhash{value: sendValue}("arbitrum", address(0x123));
-
-        uint256 blockNumber = block.number - 1;
-        bytes32 blockHash = blockhash(blockNumber);
-
-        checkPayloadAndDestination(address(0x123), "arbitrum", blockNumber, blockHash);
-
-        vm.expectRevert(EthereumStateSender.ALREADY_SENT.selector);
-        ethereumStateSender.sendBlockhash{value: sendValue}("arbitrum", address(0x123));
-    }
-
-    function test_setAdminOnlyByAdmin() public {
-        vm.prank(address(0xdead)); // Impersonate a non-admin address
-        vm.expectRevert(EthereumStateSender.ONLY_ADMIN.selector);
-        ethereumStateSender.setAdmin(address(0xdead));
-    }
-
-    function test_setSendBlockHashMinValueOnlyByAdmin() public {
-        uint256 newValue = 0.005 ether;
-        vm.prank(address(this));
-        ethereumStateSender.setSendBlockHashMinValue(newValue);
-
-        assertEq(ethereumStateSender.sendBlockHashMinValue(), newValue);
-    }
-
-    function test_sendBlockhashEmergencyOnlyByAdmin() public {
-        uint256 sendValue = ethereumStateSender.sendBlockHashMinValue();
-        vm.deal(address(0xdead), sendValue);
-        vm.prank(address(0xdead));
-        vm.expectRevert(EthereumStateSender.ONLY_ADMIN.selector);
-        ethereumStateSender.sendBlockhashEmergency{value: sendValue}("ETH", address(0x123));
-    }
-
-    // Multi-send
-
-    function test_sendMultipleChainsContracts() public {
-        // function sendBlockhash(string[] calldata _destinationChains, address[][] calldata _destinationContracts)
-        // value must be min value * number of contracts * number of chains
-
-        uint256 _numberOfChains = 2;
-        uint256 _numberOfContractsPerChain = 2;
-
-        uint256 sendValue = ethereumStateSender.sendBlockHashMinValue() * _numberOfChains * _numberOfContractsPerChain;
-
-        string[] memory destinationChains = new string[](_numberOfChains);
-        destinationChains[0] = "arbitrum";
-        destinationChains[1] = "base";
-
-        address[][] memory destinationContracts = new address[][](_numberOfChains);
-        destinationContracts[0] = new address[](_numberOfContractsPerChain);
-        destinationContracts[1] = new address[](_numberOfContractsPerChain);
-
-        // Fill destinationContracts for each chain
-        destinationContracts[0][0] = address(0x123);
-        destinationContracts[0][1] = address(0x234);
-        destinationContracts[1][0] = address(0x456);
-        destinationContracts[1][1] = address(0x678);
-
+        // First send
         vm.deal(address(this), sendValue);
-        ethereumStateSender.sendBlockhash{value: sendValue}(destinationChains, destinationContracts);
+        ethereumStateSender.sendBlockHashEmergency{value: sendValue}(chain, contracts, blockNumber, blockHash);
 
-        uint256 blockNumber = block.number - 1;
-        bytes32 blockHash = blockhash(blockNumber);
+        // Attempt to send again for the same period
+        vm.deal(address(this), sendValue);
+        ethereumStateSender.sendBlockHashEmergency{value: sendValue}(chain, contracts, blockNumber, blockHash);
+    }
 
-        // Should have called callContract 4 times
+    function testRemoveChainAndSendBlockHash() public {
+        ethereumStateSender.removeChain("base");
+
+        uint256 enabledContractsAfterRemoval = ethereumStateSender.getEnabledContracts();
+        assertEq(enabledContractsAfterRemoval, 2);
+
+        // Send block hash with the correct value for the remaining contracts
+        uint256 sendValue = ethereumStateSender.sendBlockHashMinValue() * enabledContractsAfterRemoval;
+        vm.deal(address(this), sendValue);
+        ethereumStateSender.sendBlockHash{value: sendValue}();
+
+        // Check that the block hash was sent correctly to the remaining contracts
+        address[] memory arbContracts = new address[](2);
+        arbContracts[0] = ARB_A;
+        arbContracts[1] = ARB_B;
+        for (uint256 i = 0; i < arbContracts.length; i++) {
+            checkPayloadAndDestination(i, arbContracts[i], "arbitrum", block.number - 1, blockhash(block.number - 1));
+        }
+
+        address[] memory baseContracts = new address[](2);
+        baseContracts[0] = BASE_A;
+        baseContracts[1] = BASE_B;
+
+        // Ensure that the removed contracts did not receive any data
         MockAxelarGateway _mockAxelarGateway = MockAxelarGateway(AXELAR_GATEWAY);
-        (string memory chainA, string memory storedAddressStringA, bytes memory payloadA) =
-            _mockAxelarGateway.getDestination(0); // First => 0x123
-        (string memory chainB, string memory storedAddressStringB, bytes memory payloadB) =
-            _mockAxelarGateway.getDestination(1); // Second => 0x234
-        (string memory chainC, string memory storedAddressStringC, bytes memory payloadC) =
-            _mockAxelarGateway.getDestination(2); // Third => 0x456
-        (string memory chainD, string memory storedAddressStringD, bytes memory payloadD) =
-            _mockAxelarGateway.getDestination(3); // Fourth => 0x678
-
-        address storedAddressA = stringToAddress(storedAddressStringA);
-        address storedAddressB = stringToAddress(storedAddressStringB);
-        address storedAddressC = stringToAddress(storedAddressStringC);
-        address storedAddressD = stringToAddress(storedAddressStringD);
-
-        // Assert values
-        assertEq(chainA, "arbitrum");
-        assertEq(storedAddressA, address(0x123));
-        assertEq(payloadA, abi.encodeWithSignature("setEthBlockHash(uint256,bytes32)", blockNumber, blockHash));
-
-        assertEq(chainB, "arbitrum");
-        assertEq(storedAddressB, address(0x234));
-        assertEq(payloadB, abi.encodeWithSignature("setEthBlockHash(uint256,bytes32)", blockNumber, blockHash));
-
-        assertEq(chainC, "base");
-        assertEq(storedAddressC, address(0x456));
-        assertEq(payloadC, abi.encodeWithSignature("setEthBlockHash(uint256,bytes32)", blockNumber, blockHash));
-
-        assertEq(chainD, "base");
-        assertEq(storedAddressD, address(0x678));
-        assertEq(payloadD, abi.encodeWithSignature("setEthBlockHash(uint256,bytes32)", blockNumber, blockHash));
+        for (uint256 i = 0; i < baseContracts.length; i++) {
+            (,, bytes memory payload) = _mockAxelarGateway.getDestination(i + arbContracts.length);
+            assertEq(payload.length, 0, "Removed contract should not receive data");
+        }
     }
 
-    function test_sendBlockhashNoDestinationChainsReverts() public {
-        string[] memory destinationChains = new string[](0);
-        address[][] memory destinationContracts = new address[][](0);
-
-        vm.expectRevert(EthereumStateSender.NO_DESTINATION_CHAINS.selector);
-        ethereumStateSender.sendBlockhash{value: 0.01 ether}(destinationChains, destinationContracts);
-    }
-
-    function test_sendBlockhashAlreadySentReverts() public {
-        string[] memory destinationChains = new string[](1);
-        destinationChains[0] = "arbitrum";
-
-        address[][] memory destinationContracts = new address[][](1);
-        destinationContracts[0] = new address[](1);
-        destinationContracts[0][0] = address(0x123);
-
-        uint256 sendValue = ethereumStateSender.sendBlockHashMinValue();
-        vm.deal(address(this), sendValue*2);
-
-        // First call should succeed
-        ethereumStateSender.sendBlockhash{value: sendValue}(destinationChains, destinationContracts);
-
-        // Second call should revert
-        vm.expectRevert(EthereumStateSender.ALREADY_SENT.selector);
-        ethereumStateSender.sendBlockhash{value: sendValue}(destinationChains, destinationContracts);
-    }
+    ////////////////////////////////////////////////////////////
+    /// --- UTILS
+    ////////////////////////////////////////////////////////////
 
     function checkPayloadAndDestination(
+        uint256 index,
         address expectedAddress,
         string memory expectedChain,
         uint256 expectedBlockNumber,
         bytes32 expectedBlockHash
     ) internal {
         MockAxelarGateway _mockAxelarGateway = MockAxelarGateway(AXELAR_GATEWAY);
-        (string memory chain, string memory storedAddress, bytes memory payload) = _mockAxelarGateway.getDestination(0);
+        (string memory chain, string memory storedAddress, bytes memory payload) =
+            _mockAxelarGateway.getDestination(index);
 
         address destinationAddress = stringToAddress(storedAddress);
         bytes memory expectedPayload =
@@ -196,5 +195,13 @@ contract EthereumStateSenderTest is Utils {
         assertEq(destinationAddress, expectedAddress);
         assertEq(chain, expectedChain);
         assertEq(payload, expectedPayload);
+    }
+
+    function validateChain(uint256 index, string memory expectedChain, address[] memory expectedContracts) internal {
+        EthereumStateSender.ChainContract memory chain = ethereumStateSender.getChain(index);
+        assertEq(chain.chain, expectedChain);
+        for (uint256 i = 0; i < expectedContracts.length; i++) {
+            assertEq(chain.contracts[i], expectedContracts[i]);
+        }
     }
 }

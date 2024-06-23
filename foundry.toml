@@ -5,7 +5,6 @@ libs = ["lib"]
 verbosity = 3
 ffi = true
 evm_version = 'cancun'
-viaIR = true
 
 remappings = [
     "forge-std/=lib/forge-std/src/",
