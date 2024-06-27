@@ -12,6 +12,8 @@ contract EthereumStateSender {
     using LibString for address;
 
     address public governance;
+    address public futureGovernance;
+
     address public constant AXELAR_GATEWAY = 0x4F4495243837681061C4743b74B3eEdf548D56A5;
     address public constant AXELAR_GAS_RECEIVER = 0x2d5d7d31F671F86C782533cc367F14109a082712;
 
@@ -205,6 +207,24 @@ contract EthereumStateSender {
     function setSendBlockHashMinValue(uint256 newValue) external onlyGovernance {
         sendBlockHashMinValue = newValue;
         emit SendBlockHashMinValueSet(newValue);
+    }
+
+    /// @notice Transfer the governance to a new address.
+    /// @param _governance Address of the new governance.
+    function transferGovernance(address _governance) external onlyGovernance {
+        futureGovernance = _governance;
+    }
+
+    /// @notice Accept the governance transfer.
+    function acceptGovernance() external {
+        if (msg.sender != futureGovernance) revert GovernanceOnly();
+
+        governance = msg.sender;
+
+        /// Reset the future governance.
+        futureGovernance = address(0);
+
+        emit GovernanceChanged(msg.sender);
     }
 
     ////////////////////////////////////////////////////////////

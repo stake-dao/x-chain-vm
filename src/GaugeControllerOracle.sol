@@ -6,6 +6,8 @@ import {LibString} from "solady/utils/LibString.sol";
 import {RLPReader} from "src/merkle-utils/RLPReader.sol";
 import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
 
+import "forge-std/console.sol";
+
 contract GaugeControllerOracle is Owned {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
@@ -139,9 +141,8 @@ contract GaugeControllerOracle is Owned {
                 block_header.stateRootHash,
                 proofs[0].toList()
             );
+            console.logBytes32(gauge_controller_account.codeHash);
             if (!gauge_controller_account.exists) revert GAUGE_CONTROLLER_NOT_FOUND();
-
-            stateRootHash = gauge_controller_account.storageRoot;
         }
 
         unchecked {
