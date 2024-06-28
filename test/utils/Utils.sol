@@ -22,6 +22,23 @@ abstract contract Utils is Test {
         return abi.decode(vm.ffi(inputs), (bytes32, bytes, bytes));
     }
 
+    function getRLPEncodedProofsForGaugeController(string memory rpcUrl, address _gaugeController, address _user, address _gauge, uint256 _blockNumber, uint256 _timestamp)
+        internal
+        returns (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp)
+    {
+        // Computed differently depending on the gauge controller
+        string[] memory inputs = new string[](8);
+        inputs[0] = "python3";
+        inputs[1] = "test/python/get_proof_gauge_controller.py";
+        inputs[2] = rpcUrl;
+        inputs[3] = vm.toString(_gaugeController);
+        inputs[4] = vm.toString(_user);
+        inputs[5] = vm.toString(_gauge);
+        inputs[6] = vm.toString(_blockNumber);
+        inputs[7] = vm.toString(_timestamp);
+        return abi.decode(vm.ffi(inputs), (bytes32, bytes, bytes));
+    }
+
     function stringToAddress(string memory str) public pure returns (address) {
         bytes memory strBytes = bytes(str);
         require(strBytes.length == 42, "Invalid address length");
