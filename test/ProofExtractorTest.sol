@@ -58,8 +58,6 @@ contract ProofExtractorTest is Utils {
             "mainnet", _balancerGC, _balancerUser, _balancerGauge, block.number, block.timestamp / 1 weeks * 1 weeks
         );
 
-        console.logBytes(_proof_rlp);
-
         // Submit ETH Block Hash to Oracle.
         balancerOracle.setEthBlockHash(block.number, _block_hash);
 
@@ -101,17 +99,6 @@ contract ProofExtractorTest is Utils {
         // Submit State to Oracle.
         fraxOracle.submit_state(_fraxUser, _fraxGauge, _block_header_rlp, _proof_rlp);
 
-        // console.log("voted_last_user_vote", last_user_vote);
-
-        /*
-        console.log("voted_slope.slope", voted_slope.slope);
-        console.log("voted_slope.power", voted_slope.power);
-        console.log("voted_slope.end", voted_slope.end);
-        */
-        console.log("voted_weight.bias", points_weight.bias);
-        console.log("voted_weight.slope", points_weight.slope);
-
-        /*
         /// Retrive the values from the oracle.
         (uint256 slope, uint256 power, uint256 end) =
             fraxOracle.voteUserSlope(block.number, _fraxUser, _fraxGauge);
@@ -126,6 +113,5 @@ contract ProofExtractorTest is Utils {
         assertEq(voted_slope.slope, slope);
         assertEq(voted_slope.power, power);
         assertEq(voted_slope.end, end);
-        */
     }
 }

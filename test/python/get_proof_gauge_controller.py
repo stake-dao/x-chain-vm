@@ -19,17 +19,20 @@ RPC_URL = (
 web3 = Web3(Web3.HTTPProvider(RPC_URL))
 
 GAUGES_SLOTS = {
-    "0xc128468b7ce63ea702c1f104d55a2566b13d3abd": {
+    "0xc128468b7ce63ea702c1f104d55a2566b13d3abd": {  # Balancer
         "last_user_vote": 1000000007,
         "point_weights": 1000000008,
         "vote_user_slope": 1000000005,
-        "type": "new",
     },
-    "0x3669c421b77340b2979d1a00a792cc2ee0fce737": {
+    "0x3669c421b77340b2979d1a00a792cc2ee0fce737": {  # Frax
         "last_user_vote": 1000000010,
-        "point_weights": 10000000011,
+        "point_weights": 1000000011,
         "vote_user_slope": 1000000008,
-        "type": "new",
+    },
+    "0xe60eb8098b34ed775ac44b1dde864e098c6d7f37": {  # FXN
+        "last_user_vote": 1000000010,
+        "point_weights": 1000000011,
+        "vote_user_slope": 1000000008,
     },
 }
 
@@ -48,16 +51,15 @@ def generate_proofs(gc, user, gauge, block_number, timestamp):
 
     # Positions array : [lastUserVotes; pointWeights.bias; pointsWeigths.slope; voteUserSlope.slope; voteUserSlope.power; voteUserSlope.end]
 
-    if GAUGES_SLOTS[gc]["type"] == "new":
-        last_user_vote_position = get_position_from_user_gauge(
-            user, gauge, last_user_vote_base_slot
-        )
-        point_weights_position = get_position_from_gauge_time(
-            gauge, timestamp, point_weights_base_slot
-        )
-        vote_user_slope_position = get_position_from_user_gauge(
-            user, gauge, vote_user_slope_base_slot
-        )
+    last_user_vote_position = get_position_from_user_gauge(
+        user, gauge, last_user_vote_base_slot
+    )
+    point_weights_position = get_position_from_gauge_time(
+        gauge, timestamp, point_weights_base_slot
+    )
+    vote_user_slope_position = get_position_from_user_gauge(
+        user, gauge, vote_user_slope_base_slot
+    )
 
     vote_user_slope_slope = vote_user_slope_position
     vote_user_slope_power = vote_user_slope_position + 1

@@ -38,6 +38,7 @@ abstract contract BasePlatformTest is Utils {
     MockERC20 rewardToken;
 
     address internal _user;
+    address internal _user2;
     address internal _gauge;
     address internal _blacklisted;
     address internal _deployer;
@@ -365,7 +366,7 @@ abstract contract BasePlatformTest is Utils {
         // Calculate blacklisted bias before sending proof.
         uint256 _bBias = _gaugeController.vote_user_slopes(_blacklisted, _gauge).slope
             * (_gaugeController.vote_user_slopes(_blacklisted, _gauge).end - _getCurrentPeriod());
-
+        
         (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
 
         (,, bytes memory _blacklisted_proof_rlp) = encodeProofs(_gauge, _blacklisted);
@@ -387,7 +388,8 @@ abstract contract BasePlatformTest is Utils {
         assertGt(platform.claim(_id, _proofData), 0);
 
         // Get RLP Encoded proofs.
-        (uint256 _slope,, uint256 _bEnd) = CurveOracle(oracles[0]).voteUserSlope(startPeriodBlockNumber, _blacklisted, _gauge);
+        (uint256 _slope,, uint256 _bEnd) =
+            CurveOracle(oracles[0]).voteUserSlope(startPeriodBlockNumber, _blacklisted, _gauge);
         assertEq(_bBias, _slope * (_bEnd - _getCurrentPeriod()));
     }
 
@@ -415,6 +417,57 @@ abstract contract BasePlatformTest is Utils {
         vm.prank(_user);
         platform.closeBounty(_id);
         assertEq(rewardToken.balanceOf(_user), 0);
+    }
+
+    function testClaimMultipleTimes() public {
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        skip(1 days);
+
+        (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
+
+        // Submit ETH Block Hash to Oracle.
+        CurveOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, block_hash);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimable = platform.claimable(_id, _proofData);
+        uint256 claimed = platform.claim(_id, _proofData);
+
+        assertGt(claimed, 0);
+        assertGt(claimable, 0);
+        assertApproxEqRel(claimed, claimable, 1e15);
+
+        claimable = platform.claimable(_id, _proofData);
+        claimed = platform.claim(_id, _proofData);
+
+        assertEq(claimable, 0);
+        assertEq(claimed, 0);
+
+        // Second user can claim without passing header proof (already stored by first claim)
+
+        (,, bytes memory proof_rlp_bis) = encodeProofs(_gauge, _user2);
+
+        Platform.ProofData memory _proofDataBis = Platform.ProofData({
+            user: _user2,
+            headerRlp: bytes(""),
+            userProofRlp: proof_rlp_bis,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimedBis = platform.claim(_id, _proofDataBis);
+
+        assertGt(claimedBis, 0);
+
+        assertGt(platform.rewardPerVote(_id), 0);
     }
 
     ////////////////////////////////////////////////////////////

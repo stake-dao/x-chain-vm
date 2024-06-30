@@ -48,7 +48,7 @@ def generate_proofs():
 
     # FRAX
     last_user_vote_base_slot = 1000000010 # user -> gauge
-    point_weights_base_slot = 10000000011 # user -> time
+    point_weights_base_slot = 1000000011 # user -> time
     vote_user_slope_base_slot = 1000000008 # user -> gauge
 
     # BALANCER

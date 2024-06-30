@@ -6,7 +6,7 @@ import {LibString} from "solady/utils/LibString.sol";
 import {RLPReader} from "src/merkle-utils/RLPReader.sol";
 import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
 
-contract FraxOracle is BaseGaugeControllerOracle {
+contract FXNOracle is BaseGaugeControllerOracle {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
     using LibString for address;
