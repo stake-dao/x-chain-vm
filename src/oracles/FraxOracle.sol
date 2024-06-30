@@ -52,17 +52,15 @@ contract FraxOracle is BaseGaugeControllerOracle {
             stateRootHash = gauge_controller_account.storageRoot;
         }
         unchecked {
-            console.log("contract");
-
-            /*
             /// User's account proof.
             /// Last User Vote.
             lastVote = Verifier.extractSlotValueFromProof(
-                keccak256(abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(1000000008, _user)), _gauge))))),
+                keccak256(abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(1000000010, _user)), _gauge))))),
                 stateRootHash,
                 proofs[1].toList()
             ).value;
-            */
+
+            // console.log("lastVote", lastVote);
 
             userSlope.slope = Verifier.extractSlotValueFromProof(
                 keccak256(
@@ -72,7 +70,7 @@ contract FraxOracle is BaseGaugeControllerOracle {
                 proofs[4].toList()
             ).value;
 
-            console.log("User slope.slope", userSlope.slope);
+            // console.log("User slope.slope", userSlope.slope);
 
             userSlope.power = Verifier.extractSlotValueFromProof(
                 keccak256(
@@ -82,7 +80,7 @@ contract FraxOracle is BaseGaugeControllerOracle {
                 proofs[5].toList()
             ).value;
 
-            console.log("User slope.power", userSlope.power);
+            // console.log("User slope.power", userSlope.power);
 
             userSlope.end = Verifier.extractSlotValueFromProof(
                 keccak256(
@@ -92,8 +90,8 @@ contract FraxOracle is BaseGaugeControllerOracle {
                 proofs[6].toList()
             ).value;
 
-            console.log("User slope.end", userSlope.end);
-
+            // console.log("User slope.end", userSlope.end);
+        
             weight = pointWeights[_gauge][blockNumber];
             if (weight.bias == 0) {
                 /// Gauge Weight proof.
@@ -101,7 +99,7 @@ contract FraxOracle is BaseGaugeControllerOracle {
 
                 weight.bias = Verifier.extractSlotValueFromProof(
                     keccak256(
-                        abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(10000000013, _gauge)), time))) + 0)
+                        abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(10000000011, _gauge)), time))) + 0)
                     ),
                     stateRootHash,
                     proofs[2].toList()
@@ -111,7 +109,7 @@ contract FraxOracle is BaseGaugeControllerOracle {
 
                 weight.slope = Verifier.extractSlotValueFromProof(
                     keccak256(
-                        abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(10000000013, _gauge)), time))) + 1)
+                        abi.encode(uint256(keccak256(abi.encode(keccak256(abi.encode(10000000011, _gauge)), time))) + 1)
                     ),
                     stateRootHash,
                     proofs[3].toList()

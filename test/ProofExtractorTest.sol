@@ -5,10 +5,10 @@ import "test/utils/Utils.sol";
 
 import {GaugeController} from "src/interfaces/GaugeController.sol";
 import {EthereumStateSender} from "src/EthereumStateSender.sol";
-import {GaugeControllerOracle} from "src/GaugeControllerOracle.sol";
+import {CurveOracle} from "src/oracles/CurveOracle.sol";
 
-import {BalancerOracle} from "src/BalancerOracle.sol";
-import {FraxOracle} from "src/FraxOracle.sol";
+import {BalancerOracle} from "src/oracles/BalancerOracle.sol";
+import {FraxOracle} from "src/oracles/FraxOracle.sol";
 
 import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
 
@@ -20,8 +20,8 @@ contract ProofExtractorTest is Utils {
     address internal constant _deployer = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;
 
     // Balancer
-    address internal _balancerUser = 0x04e8e5aA372D8e2233D2EF26079e23E3309003D5;
-    address internal _balancerGauge = 0x2D02Bf5EA195dc09854E18E7d2857A16bF376963;
+    address internal _balancerUser = 0xea79d1A83Da6DB43a85942767C389fE0ACf336A5;
+    address internal _balancerGauge = 0xBC5E2f2945Ff4a6568C4DBD3aA15D9e8FfDF0125;
     address internal _balancerGC = 0xC128468b7Ce63eA702C1f104D55A2566b13D3ABD;
 
     // Frax
@@ -57,6 +57,8 @@ contract ProofExtractorTest is Utils {
         getRLPEncodedProofsForGaugeController(
             "mainnet", _balancerGC, _balancerUser, _balancerGauge, block.number, block.timestamp / 1 weeks * 1 weeks
         );
+
+        console.logBytes(_proof_rlp);
 
         // Submit ETH Block Hash to Oracle.
         balancerOracle.setEthBlockHash(block.number, _block_hash);
@@ -99,10 +101,13 @@ contract ProofExtractorTest is Utils {
         // Submit State to Oracle.
         fraxOracle.submit_state(_fraxUser, _fraxGauge, _block_header_rlp, _proof_rlp);
 
+        // console.log("voted_last_user_vote", last_user_vote);
+
+        /*
         console.log("voted_slope.slope", voted_slope.slope);
         console.log("voted_slope.power", voted_slope.power);
         console.log("voted_slope.end", voted_slope.end);
-
+        */
         console.log("voted_weight.bias", points_weight.bias);
         console.log("voted_weight.slope", points_weight.slope);
 

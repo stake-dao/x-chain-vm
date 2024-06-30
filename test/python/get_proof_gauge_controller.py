@@ -27,7 +27,7 @@ GAUGES_SLOTS = {
     },
     "0x3669c421b77340b2979d1a00a792cc2ee0fce737": {
         "last_user_vote": 1000000010,
-        "point_weights": 10000000013,
+        "point_weights": 10000000011,
         "vote_user_slope": 1000000008,
         "type": "new",
     },
@@ -47,12 +47,6 @@ def generate_proofs(gc, user, gauge, block_number, timestamp):
     timestamp = int(timestamp)
 
     # Positions array : [lastUserVotes; pointWeights.bias; pointsWeigths.slope; voteUserSlope.slope; voteUserSlope.power; voteUserSlope.end]
-    # 61631521168299689871618715479280866927801819302010895179907038285020035817513
-    # 43191216227952913941400108316074680035164138003980457889292844412181225935807
-    # 43191216227952913941400108316074680035164138003980457889292844412181225935808
-    # 17969391893915224584872991688491589142280908254174880360086302791287691034494
-    # 17969391893915224584872991688491589142280908254174880360086302791287691034495
-    # 17969391893915224584872991688491589142280908254174880360086302791287691034496
 
     if GAUGES_SLOTS[gc]["type"] == "new":
         last_user_vote_position = get_position_from_user_gauge(
@@ -72,11 +66,20 @@ def generate_proofs(gc, user, gauge, block_number, timestamp):
     points_weights_bias = point_weights_position
     points_weights_slope = point_weights_position + 1
 
-    positions = [last_user_vote_position, points_weights_bias, points_weights_slope, vote_user_slope_slope, vote_user_slope_power, vote_user_slope_end]
+    positions = [
+        last_user_vote_position,
+        points_weights_bias,
+        points_weights_slope,
+        vote_user_slope_slope,
+        vote_user_slope_power,
+        vote_user_slope_end,
+    ]
 
     # Encode RLP proofs
     rlp_proof = encode_rlp_proofs(
-        web3.eth.get_proof(web3.to_checksum_address(gc), positions, block_identifier=int(block_number))
+        web3.eth.get_proof(
+            web3.to_checksum_address(gc), positions, block_identifier=int(block_number)
+        )
     )
 
     toji_output = run_toji("https://eth.llamarpc.com", block_number)

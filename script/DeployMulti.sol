@@ -6,7 +6,7 @@ import "forge-std/Script.sol";
 
 import {Platform} from "src/Platform.sol";
 import {AxelarExecutable} from "src/AxelarExecutable.sol";
-import {GaugeControllerOracle} from "src/GaugeControllerOracle.sol";
+import {CurveOracle} from "src/oracles/CurveOracle.sol";
 
 abstract contract DeployMulti is Script, Utils {
     address internal constant DEPLOYER = 0x8898502BA35AB64b3562aBC509Befb7Eb178D4df;
@@ -28,10 +28,10 @@ abstract contract DeployMulti is Script, Utils {
         vm.startBroadcast(pk);
 
         // Deploy oracles for Curve, Balancer, Frax, FXN
-        GaugeControllerOracle curve_oracle = new GaugeControllerOracle(address(0), CURVE_GAUGE_CONTROLLER);
-        GaugeControllerOracle balancer_oracle = new GaugeControllerOracle(address(0), BALANCER_GAUGE_CONTROLLER);
-        GaugeControllerOracle frax_oracle = new GaugeControllerOracle(address(0), FRAX_GAUGE_CONTROLLER);
-        GaugeControllerOracle fxn_oracle = new GaugeControllerOracle(address(0), FXN_GAUGE_CONTROLLER);
+        CurveOracle curve_oracle = new CurveOracle(address(0), CURVE_GAUGE_CONTROLLER);
+        CurveOracle balancer_oracle = new CurveOracle(address(0), BALANCER_GAUGE_CONTROLLER);
+        CurveOracle frax_oracle = new CurveOracle(address(0), FRAX_GAUGE_CONTROLLER);
+        CurveOracle fxn_oracle = new CurveOracle(address(0), FXN_GAUGE_CONTROLLER);
 
         address[] memory oracles = new address[](4);
         oracles[0] = address(curve_oracle);

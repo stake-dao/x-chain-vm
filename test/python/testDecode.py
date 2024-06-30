@@ -26,19 +26,54 @@ def generate_proofs():
     # 17969391893915224584872991688491589142280908254174880360086302791287691034494
     # 17969391893915224584872991688491589142280908254174880360086302791287691034495
     # 17969391893915224584872991688491589142280908254174880360086302791287691034496
-    
+
+    # Frax
+    gauge_controller = "0x3669C421b77340B2979d1A00a792CC2ee0FcE737"  # Frax
+    user = "0x59cfcd384746ec3035299d90782be065e466800b"
+    gauge = "0x18fefe5db2d63acaa8b5520afde32507216d39e1"
+
+    # Balancer
+    """
     gauge_controller = "0xC128468b7Ce63eA702C1f104D55A2566b13D3ABD"  # Balancer
     user = "0x04e8e5aA372D8e2233D2EF26079e23E3309003D5"
-    gauge = "0x2D02Bf5EA195dc09854E18E7d2857A16bF376963"
+    gauge = "0xdacd99029b4b94cd04fe364aac370829621c1c64"
+    """
 
-    # Test multiple base slots (from 0 to 100)
-    last_user_vote_base_slot = 1000000007 # user -> gauge
-    point_weights_base_slot = 1000000008 # user -> time
-    vote_user_slope_base_slot = 1000000005 # user -> gauge
+    """
+    # FXN
+    gauge_controller = "0xe60eB8098B34eD775ac44B1ddE864e098C6d7f37"  # FXN
+    user = "0xc40549aa1d05c30af23a1c4a5af6ba11fcafe23f"
+    gauge = "0xf0a3eced42dbd8353569639c0eaa833857aa0a75"
+    """
 
-    last_user_vote_position = get_position_from_user_gauge(user, gauge, last_user_vote_base_slot)
-    point_weights_position = get_position_from_gauge_time(gauge, timestamp, point_weights_base_slot)
-    vote_user_slope_position = get_position_from_user_gauge(user, gauge, vote_user_slope_base_slot)
+    # FRAX
+    last_user_vote_base_slot = 1000000010 # user -> gauge
+    point_weights_base_slot = 10000000011 # user -> time
+    vote_user_slope_base_slot = 1000000008 # user -> gauge
+
+    # BALANCER
+    """
+    last_user_vote_base_slot = 1000000007  # user -> gauge
+    point_weights_base_slot = 1000000008  # user -> time
+    vote_user_slope_base_slot = 1000000005  # user -> gauge
+    """
+
+    """
+    # FXN 
+    last_user_vote_base_slot = 1000000010
+    point_weights_base_slot = 1000000011
+    vote_user_slope_base_slot = 1000000008
+    """
+
+    last_user_vote_position = get_position_from_user_gauge(
+        user, gauge, last_user_vote_base_slot
+    )
+    point_weights_position = get_position_from_gauge_time(
+        gauge, timestamp, point_weights_base_slot
+    )
+    vote_user_slope_position = get_position_from_user_gauge(
+        user, gauge, vote_user_slope_base_slot
+    )
 
     vote_user_slope_slope = vote_user_slope_position
     vote_user_slope_power = vote_user_slope_position + 1
@@ -47,18 +82,19 @@ def generate_proofs():
     points_weights_bias = point_weights_position
     points_weights_slope = point_weights_position + 1
 
+    """
     print(last_user_vote_position)
     print(points_weights_bias)
     print(points_weights_slope)
     print(vote_user_slope_slope)
     print(vote_user_slope_power)
     print(vote_user_slope_end)
-
+    """
 
     # Calculate the storage slot for the admin addres
-    #proof = web3.eth.get_proof(gauge_controller, [position], block.number)
+    proof = web3.eth.get_proof(gauge_controller, [points_weights_slope], block.number)
 
-    #print(int.from_bytes(proof.storageProof[0].value, byteorder="big"))
+    print(int.from_bytes(proof.storageProof[0].value, byteorder="big"))
 
     """
     # Encode the proof
@@ -80,6 +116,7 @@ def get_position_from_user_gauge(user, gauge, base_slot):
     # Convert the final hash to an integer slot number
     return int.from_bytes(final_slot, byteorder="big")
 
+
 def get_position_from_gauge_time(gauge, time, base_slot):
     # Encode the user address with the base slot and hash
     gauge_encoded = keccak(encode(["uint256", "address"], [base_slot, gauge]))
@@ -89,6 +126,7 @@ def get_position_from_gauge_time(gauge, time, base_slot):
 
     # Convert the final hash to an integer slot number
     return int.from_bytes(final_slot, byteorder="big")
+
 
 def encode_rlp_proofs(proofs):
     account_proof = list(map(rlp.decode, map(HexBytes, proofs["accountProof"])))
