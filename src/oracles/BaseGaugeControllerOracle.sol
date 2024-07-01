@@ -32,6 +32,7 @@ abstract contract BaseGaugeControllerOracle is Owned {
     error NOT_OWNER();
     error INVALID_HASH();
     error WRONG_CONTEXT();
+    error WRONG_DECODING();
     error WRONG_SOURCE_CHAIN();
     error WRONG_SOURCE_ADDRESS();
     error INVALID_BLOCK_HEADER();
@@ -86,17 +87,28 @@ abstract contract BaseGaugeControllerOracle is Owned {
 
     function submit_state(address _user, address _gauge, bytes memory block_header_rlp_, bytes memory _proof_rlp)
         external
-    { 
+    {
         // If not set for the last block number, set it
         if (block_header_rlp[last_eth_block_number].length == 0) {
+            if (block_header_rlp_.length == 0) revert INVALID_BLOCK_HEADER();
             block_header_rlp[last_eth_block_number] = block_header_rlp_;
         }
 
         bytes memory _block_header_rlp = block_header_rlp[last_eth_block_number];
 
         // Verify the state proof
-        (Point memory point, VotedSlope memory votedSlope, uint256 lastVote, uint256 blockNumber, bytes32 stateRootHash)
-        = _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
+        (
+            Point memory point,
+            VotedSlope memory votedSlope,
+            uint256 lastVote,
+            uint256 blockNumber,
+            bytes32 stateRootHash
+        ) = _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
+
+        if (
+            point.bias == 0 || point.slope == 0 || votedSlope.slope == 0 || votedSlope.power == 0
+                || votedSlope.end == 0 || lastVote == 0 || blockNumber == 0
+        ) revert WRONG_DECODING();
 
         pointWeights[_gauge][blockNumber] = point;
         voteUserSlope[blockNumber][_user][_gauge] = votedSlope;
@@ -117,7 +129,7 @@ abstract contract BaseGaugeControllerOracle is Owned {
             bytes32 stateRootHash
         )
     {
-        // Use cached block header RLP if available 
+        // Use cached block header RLP if available
         if (block_header_rlp[last_eth_block_number].length > 0) {
             _block_header_rlp = block_header_rlp[last_eth_block_number];
         }
