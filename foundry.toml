@@ -9,9 +9,19 @@ evm_version = 'cancun'
 remappings = [
     "forge-std/=lib/forge-std/src/",
     "solmate/=lib/solmate/src/",
-    "solady/=lib/solady/src/"
+    "solady/=lib/solady/src/",
 ]
+
+[etherscan]
+mainnet = { key = "${ETHERSCAN_KEY}" }
+arbitrum = { key = "${ARBISCAN_KEY}" }
+optimism = { key = "${OPTISCAN_KEY}" }
+base = { key = "${BASESCAN_KEY}" }
+
 
 [rpc_endpoints]
 mainnet = "https://mainnet.infura.io/v3/${INFURA_KEY}"
-arb = "https://arbitrum-mainnet.infura.io/v3/${INFURA_KEY}"
+arbitrum = "https://arbitrum-mainnet.infura.io/v3/${INFURA_KEY}"
+optimism = "https://optimism-mainnet.infura.io/v3/${INFURA_KEY}"
+base = "https://base-rpc.publicnode.com	"
+bsc = "https://lb.drpc.org/ogrpc?network=bsc&dkey=Ak80gSCleU1Frwnafb5Ka4VtAXxDLhcR76MthkHL9tz4"

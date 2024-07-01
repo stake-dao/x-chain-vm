@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.20;
 
 import "test/utils/Utils.sol";
@@ -7,7 +7,7 @@ import "forge-std/Script.sol";
 import {Platform} from "src/Platform.sol";
 import {AxelarExecutable} from "src/AxelarExecutable.sol";
 import {EthereumStateSender} from "src/EthereumStateSender.sol";
-import {GaugeControllerOracle} from "src/GaugeControllerOracle.sol";
+import {CurveOracle} from "src/oracles/CurveOracle.sol";
 
 abstract contract BaseSideChains is Script, Utils {
     /// Ethereum State Sender.
@@ -20,7 +20,7 @@ abstract contract BaseSideChains is Script, Utils {
     address internal STAKE_LOCKER = 0x52f541764E6e90eeBc5c21Ff570De0e2D63766B6;
 
     Platform platform;
-    GaugeControllerOracle oracle;
+    CurveOracle oracle;
     AxelarExecutable axelarExecutable;
 
     address internal constant DEPLOYER = 0x000755Fbe4A24d7478bfcFC1E561AfCE82d1ff62;
@@ -34,9 +34,12 @@ abstract contract BaseSideChains is Script, Utils {
     function run() public {
         vm.startBroadcast(DEPLOYER);
 
-        oracle = new GaugeControllerOracle(address(0), gaugeController);
+        oracle = new CurveOracle(address(0), gaugeController);
 
-        axelarExecutable = new AxelarExecutable(_AXELAR_GATEWAY, ETH_STATE_SENDER, address(oracle));
+        address[] memory oracles = new address[](1);
+        oracles[0] = address(oracle);
+
+        axelarExecutable = new AxelarExecutable(_AXELAR_GATEWAY, ETH_STATE_SENDER, oracles);
         oracle.setAxelarExecutable(address(axelarExecutable));
 
         platform = new Platform(address(oracle), DEPLOYER, DEPLOYER);

@@ -10,7 +10,8 @@ import {AxelarExecutable} from "src/AxelarExecutable.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {GaugeController} from "src/interfaces/GaugeController.sol";
 import {EthereumStateSender} from "src/EthereumStateSender.sol";
-import {GaugeControllerOracle} from "src/GaugeControllerOracle.sol";
+import {BaseGaugeControllerOracle} from "src/oracles/BaseGaugeControllerOracle.sol";
+import {CurveOracle} from "src/oracles/CurveOracle.sol";
 
 contract AxelarGateway {
     function validateContractCall(bytes32, string calldata, string calldata, bytes32) external pure returns (bool) {
@@ -18,14 +19,15 @@ contract AxelarGateway {
     }
 }
 
-contract PlatformXChainTest is Utils {
+abstract contract BasePlatformTest is Utils {
     using LibString for string;
     using LibString for address;
     using stdStorage for StdStorage;
 
     EthereumStateSender sender;
-    GaugeControllerOracle oracle;
     AxelarExecutable axelarExecutable;
+
+    address[] internal oracles;
 
     // Main Platform Contract
     Platform internal platform;
@@ -35,44 +37,56 @@ contract PlatformXChainTest is Utils {
     // Bounty Token.
     MockERC20 rewardToken;
 
-    address internal constant _user = 0x52f541764E6e90eeBc5c21Ff570De0e2D63766B6;
-    address internal constant _gauge = 0x26F7786de3E6D9Bd37Fcf47BE6F2bC455a21b74A;
-    address internal constant _blacklisted = 0xecdED8b1c603cF21299835f1DFBE37f10F2a29Af;
-    address internal constant _deployer = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;
+    address internal _user;
+    address internal _user2;
+    address internal _gauge;
+    address internal _blacklisted;
+    address internal _deployer;
 
     AxelarGateway internal _gateway;
 
     // Gauge Controller
-    GaugeController internal constant _gaugeController = GaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB);
+    GaugeController internal _gaugeController;
 
     uint256 internal constant _amount = 10_000e18;
 
-    function setUp() public {
-        uint256 forkId = vm.createFork("https://eth.public-rpc.com", 19728000); // Wednesday 24
+    uint256 internal blockNumber;
+    uint256 internal startPeriodBlockNumber;
+
+    function setUp() public virtual {
+        uint256 forkId = vm.createFork("https://eth.public-rpc.com", blockNumber);
         vm.selectFork(forkId);
 
         _gateway = new AxelarGateway();
         rewardToken = new MockERC20("Token", "TKO", 18);
+    }
 
-        sender = new EthereumStateSender(_deployer);
+    function testMultipleOraclesReceivePayload() public {
+        // Build the proof.
+        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
+            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
+        // Get RLP Encoded proofs.
+        (bytes32 _block_hash,,) = getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
-        oracle = new GaugeControllerOracle(address(axelarExecutable), address(_gaugeController));
-        axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), address(oracle));
-        oracle.setAxelarExecutable(address(axelarExecutable));
+        assertEq(BaseGaugeControllerOracle(oracles[0]).activePeriod(), 0);
+        assertEq(BaseGaugeControllerOracle(oracles[1]).activePeriod(), 0);
 
-        platform = new Platform(address(oracle), address(this), address(this));
+        // Submit ETH Block Hash to Oracle.
+        axelarExecutable.execute(
+            "",
+            "Ethereum",
+            address(sender).toHexStringChecksumed(),
+            abi.encodeWithSelector(BaseGaugeControllerOracle.setEthBlockHash.selector, _blockNumber, _block_hash)
+        );
 
-        // Claimable (view) platform
-        platformClaimable = new PlatformClaimable(address(oracle));
-
-        rewardToken.mint(address(this), _amount);
-        rewardToken.approve(address(platform), _amount);
+        assertEq(BaseGaugeControllerOracle(oracles[0]).activePeriod(), _getCurrentPeriod());
+        assertEq(BaseGaugeControllerOracle(oracles[1]).activePeriod(), _getCurrentPeriod());
     }
 
     function testSetRecipient() public {
         address FAKE_RECIPIENT = address(0xCACA);
-        oracle.setRecipient(_user, FAKE_RECIPIENT);
-        assertEq(oracle.recipient(_user), FAKE_RECIPIENT);
+        BaseGaugeControllerOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
+        assertEq(BaseGaugeControllerOracle(oracles[0]).recipient(_user), FAKE_RECIPIENT);
     }
 
     function testSetRecipientWrongAuth() public {
@@ -80,8 +94,8 @@ contract PlatformXChainTest is Utils {
 
         // Random User
         vm.prank(address(0x1));
-        vm.expectRevert(GaugeControllerOracle.NOT_OWNER.selector);
-        oracle.setRecipient(_user, FAKE_RECIPIENT);
+        vm.expectRevert(BaseGaugeControllerOracle.NOT_OWNER.selector);
+        BaseGaugeControllerOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
     }
 
     function testWhitelist() public {
@@ -112,9 +126,9 @@ contract PlatformXChainTest is Utils {
         (bytes32 _block_hash,,) = getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        CurveOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
 
-        assertEq(oracle.activePeriod(), _getCurrentPeriod());
+        assertEq(CurveOracle(oracles[0]).activePeriod(), _getCurrentPeriod());
     }
 
     function testSetBlockHashAlreadySet() public {
@@ -128,13 +142,13 @@ contract PlatformXChainTest is Utils {
         (bytes32 _block_hash,,) = getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        CurveOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
 
-        assertEq(oracle.activePeriod(), _getCurrentPeriod());
+        assertEq(CurveOracle(oracles[0]).activePeriod(), _getCurrentPeriod());
 
-        vm.expectRevert(GaugeControllerOracle.PERIOD_ALREADY_UPDATED.selector);
+        vm.expectRevert(BaseGaugeControllerOracle.PERIOD_ALREADY_UPDATED.selector);
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        CurveOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
     }
 
     function testSetBlockHashWithAxelar() public {
@@ -147,17 +161,57 @@ contract PlatformXChainTest is Utils {
         // Get RLP Encoded proofs.
         (bytes32 _block_hash,,) = getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
 
-        assertEq(oracle.activePeriod(), 0);
+        assertEq(CurveOracle(oracles[0]).activePeriod(), 0);
 
         // Submit ETH Block Hash to Oracle.
         axelarExecutable.execute(
             "",
             "Ethereum",
             address(sender).toHexStringChecksumed(),
-            abi.encodeWithSelector(GaugeControllerOracle.setEthBlockHash.selector, _blockNumber, _block_hash)
+            abi.encodeWithSelector(BaseGaugeControllerOracle.setEthBlockHash.selector, _blockNumber, _block_hash)
         );
 
-        assertEq(oracle.activePeriod(), _getCurrentPeriod());
+        assertEq(CurveOracle(oracles[0]).activePeriod(), _getCurrentPeriod());
+    }
+
+    function testClaimable() public {
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        skip(1 days);
+
+        (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
+
+        // Submit ETH Block Hash to Oracle.
+        BaseGaugeControllerOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, block_hash);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimable = platform.claimable(_id, _proofData);
+        uint256 claimableOnClaimable = platformClaimable.claimable(platform, _id, _proofData);
+        uint256 claimed = platform.claim(_id, _proofData);
+
+        assertGt(claimed, 0);
+        assertGt(claimable, 0);
+        assertEq(claimable, claimableOnClaimable);
+        assertApproxEqRel(claimed, claimable, 1e15);
+
+        assertGt(platform.rewardPerVote(_id), 0);
+
+        claimable = platform.claimable(_id, _proofData);
+        claimableOnClaimable = platformClaimable.claimable(platform, _id, _proofData);
+        claimed = platform.claim(_id, _proofData);
+
+        assertEq(claimable, 0);
+        assertEq(claimed, 0);
+        assertEq(claimableOnClaimable, 0);
     }
 
     function testClaimBribeWithWhitelistedRecipientNotSet() public {
@@ -167,24 +221,17 @@ contract PlatformXChainTest is Utils {
 
         skip(1 days);
 
-        // Build the proof.
-        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
-            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 19730772; // Thursday (first day of period)
-
-        // Get RLP Encoded proofs.
-        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
-            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+        (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        CurveOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, block_hash);
         platform.whitelistAddress(_user, true);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
             user: _user,
-            headerRlp: _block_header_rlp,
-            userProofRlp: _proof_rlp,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
             blackListedProofsRlp: new bytes[](0)
         });
 
@@ -199,26 +246,19 @@ contract PlatformXChainTest is Utils {
 
         skip(1 days);
 
-        // Build the proof.
-        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
-            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 19730772; // Thursday (first day of period)
-
-        // Get RLP Encoded proofs.
-        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
-            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+        (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        CurveOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, block_hash);
 
         address FAKE_RECIPIENT = address(0xCACA);
-        oracle.setRecipient(_user, FAKE_RECIPIENT);
+        CurveOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
             user: _user,
-            headerRlp: _block_header_rlp,
-            userProofRlp: _proof_rlp,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
             blackListedProofsRlp: new bytes[](0)
         });
 
@@ -243,27 +283,21 @@ contract PlatformXChainTest is Utils {
         skip(1 days);
 
         // Build the proof.
-        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
-            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 19730772; // Thursday (first day of period)
-
-        // Get RLP Encoded proofs.
-        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
-            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+        (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        CurveOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, block_hash);
 
         platform.whitelistAddress(_user, true);
 
         address FAKE_RECIPIENT = address(0xCACA);
-        oracle.setRecipient(_user, FAKE_RECIPIENT);
+        CurveOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
             user: _user,
-            headerRlp: _block_header_rlp,
-            userProofRlp: _proof_rlp,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
             blackListedProofsRlp: new bytes[](0)
         });
 
@@ -293,23 +327,16 @@ contract PlatformXChainTest is Utils {
 
         skip(1 days);
 
-        // Build the proof.
-        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
-            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 19730772; // Thursday (first day of period)
-
-        // Get RLP Encoded proofs.
-        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
-            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+        (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        CurveOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, block_hash);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
             user: _user,
-            headerRlp: _block_header_rlp,
-            userProofRlp: _proof_rlp,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
             blackListedProofsRlp: new bytes[](0)
         });
 
@@ -327,55 +354,6 @@ contract PlatformXChainTest is Utils {
 
         assertEq(claimable, 0);
         assertEq(claimed, 0);
-    }
-
-    function testClaimable() public {
-        // Create Default Bounty.
-        uint256 _id = _createDefaultBounty(1 weeks);
-        _gaugeController.checkpoint_gauge(_gauge);
-
-        // Deploy a claimable platform
-
-        skip(1 days);
-
-        // Build the proof.
-        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
-            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 19730772; // Thursday (first day of period)
-
-        // Get RLP Encoded proofs.
-        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
-            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
-
-        // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
-
-        // No need to submit it.
-        Platform.ProofData memory _proofData = Platform.ProofData({
-            user: _user,
-            headerRlp: _block_header_rlp,
-            userProofRlp: _proof_rlp,
-            blackListedProofsRlp: new bytes[](0)
-        });
-
-        uint256 claimable = platform.claimable(_id, _proofData);
-        uint256 claimableOnClaimable = platformClaimable.claimable(platform, _id, _proofData);
-        uint256 claimed = platform.claim(_id, _proofData);
-
-        assertGt(claimed, 0);
-        assertGt(claimable, 0);
-        assertEq(claimable, claimableOnClaimable);
-        assertApproxEqRel(claimed, claimable, 1e15);
-
-        assertGt(platform.rewardPerVote(_id), 0);
-
-        claimable = platform.claimable(_id, _proofData);
-        claimableOnClaimable = platformClaimable.claimable(platform, _id, _proofData);
-        claimed = platform.claim(_id, _proofData);
-
-        assertEq(claimable, 0);
-        assertEq(claimed, 0);
-        assertEq(claimableOnClaimable, 0);
     }
 
     function testClaimWithBlacklistedAddress() public {
@@ -389,23 +367,12 @@ contract PlatformXChainTest is Utils {
         uint256 _bBias = _gaugeController.vote_user_slopes(_blacklisted, _gauge).slope
             * (_gaugeController.vote_user_slopes(_blacklisted, _gauge).end - _getCurrentPeriod());
 
-        // Build the proof.
-        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
-            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 19730772; // Thursday (first day of period)
+        (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
 
-        // Get RLP Encoded proofs.
-        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
-            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
-
-        // Build the proof.
-        (,,, _positions,) = sender.generateEthProofParams(_blacklisted, _gauge, _getCurrentPeriod());
-
-        (,, bytes memory _blacklisted_proof_rlp) =
-            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+        (,, bytes memory _blacklisted_proof_rlp) = encodeProofs(_gauge, _blacklisted);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        CurveOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, block_hash);
 
         bytes[] memory _blacklistedProofs = new bytes[](1);
         _blacklistedProofs[0] = _blacklisted_proof_rlp;
@@ -413,15 +380,16 @@ contract PlatformXChainTest is Utils {
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
             user: _user,
-            headerRlp: _block_header_rlp,
-            userProofRlp: _proof_rlp,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
             blackListedProofsRlp: _blacklistedProofs
         });
 
         assertGt(platform.claim(_id, _proofData), 0);
 
         // Get RLP Encoded proofs.
-        (uint256 _slope,, uint256 _bEnd) = oracle.voteUserSlope(_blockNumber, _blacklisted, _gauge);
+        (uint256 _slope,, uint256 _bEnd) =
+            CurveOracle(oracles[0]).voteUserSlope(startPeriodBlockNumber, _blacklisted, _gauge);
         assertEq(_bBias, _slope * (_bEnd - _getCurrentPeriod()));
     }
 
@@ -430,23 +398,16 @@ contract PlatformXChainTest is Utils {
         uint256 _id = _createDefaultBounty(3 weeks);
         _gaugeController.checkpoint_gauge(_gauge);
 
-        // Build the proof.
-        (,,, uint256[6] memory _positions, uint256 _blockNumber) =
-            sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
-        _blockNumber = 19730772; // Thursday (first day of period)
-
-        // Get RLP Encoded proofs.
-        (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) =
-            getRLPEncodedProofs("mainnet", address(_gaugeController), _positions, _blockNumber);
+        (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
 
         // Submit ETH Block Hash to Oracle.
-        oracle.setEthBlockHash(_blockNumber, _block_hash);
+        CurveOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, block_hash);
 
         // No need to submit it.
         Platform.ProofData memory _proofData = Platform.ProofData({
             user: _user,
-            headerRlp: _block_header_rlp,
-            userProofRlp: _proof_rlp,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
             blackListedProofsRlp: new bytes[](0)
         });
 
@@ -457,6 +418,67 @@ contract PlatformXChainTest is Utils {
         platform.closeBounty(_id);
         assertEq(rewardToken.balanceOf(_user), 0);
     }
+
+    function testClaimMultipleTimes() public {
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
+        _gaugeController.checkpoint_gauge(_gauge);
+
+        skip(1 days);
+
+        (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
+
+        // Submit ETH Block Hash to Oracle.
+        CurveOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, block_hash);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimable = platform.claimable(_id, _proofData);
+        uint256 claimed = platform.claim(_id, _proofData);
+
+        assertGt(claimed, 0);
+        assertGt(claimable, 0);
+        assertApproxEqRel(claimed, claimable, 1e15);
+
+        claimable = platform.claimable(_id, _proofData);
+        claimed = platform.claim(_id, _proofData);
+
+        assertEq(claimable, 0);
+        assertEq(claimed, 0);
+
+        // Second user can claim without passing header proof (already stored by first claim)
+
+        (,, bytes memory proof_rlp_bis) = encodeProofs(_gauge, _user2);
+
+        Platform.ProofData memory _proofDataBis = Platform.ProofData({
+            user: _user2,
+            headerRlp: bytes(""),
+            userProofRlp: proof_rlp_bis,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimedBis = platform.claim(_id, _proofDataBis);
+
+        assertGt(claimedBis, 0);
+
+        assertGt(platform.rewardPerVote(_id), 0);
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// --- Helpers
+    ////////////////////////////////////////////////////////////
+
+    function encodeProofs(address gauge, address user)
+        public
+        virtual
+        returns (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp)
+    {}
 
     function _createCustomBribe(
         address gauge,
