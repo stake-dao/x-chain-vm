@@ -5,7 +5,6 @@ import {Owned} from "solmate/auth/Owned.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {RLPReader} from "src/merkle-utils/RLPReader.sol";
 import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
-import 'forge-std/console.sol';
 
 abstract contract BaseGaugeControllerOracle is Owned {
     using RLPReader for bytes;
