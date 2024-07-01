@@ -56,16 +56,14 @@ contract CurvePlatformTest is BasePlatformTest {
         rewardToken.mint(address(this), _amount);
         rewardToken.approve(address(platform), _amount);
     }
-  
+
     function encodeProofs(address gauge, address user)
         public
         override
         returns (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp)
     {
         // Build the proof.
-        (,,, uint256[6] memory _positions,) =
-            sender.generateEthProofParams(user, gauge, _getCurrentPeriod());
-
+        (,,, uint256[6] memory _positions,) = sender.generateEthProofParams(user, gauge, _getCurrentPeriod());
 
         // Get RLP Encoded proofs.
         (_block_hash, _block_header_rlp, _proof_rlp) =

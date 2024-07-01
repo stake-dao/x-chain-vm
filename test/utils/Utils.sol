@@ -22,10 +22,14 @@ abstract contract Utils is Test {
         return abi.decode(vm.ffi(inputs), (bytes32, bytes, bytes));
     }
 
-    function getRLPEncodedProofsForGaugeController(string memory rpcUrl, address _gaugeController, address _user, address _gauge, uint256 _blockNumber, uint256 _timestamp)
-        internal
-        returns (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp)
-    {
+    function getRLPEncodedProofsForGaugeController(
+        string memory rpcUrl,
+        address _gaugeController,
+        address _user,
+        address _gauge,
+        uint256 _blockNumber,
+        uint256 _timestamp
+    ) internal returns (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp) {
         // Computed differently depending on the gauge controller
         string[] memory inputs = new string[](8);
         inputs[0] = "python3";

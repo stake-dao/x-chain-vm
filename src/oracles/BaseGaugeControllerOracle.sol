@@ -96,14 +96,8 @@ abstract contract BaseGaugeControllerOracle is Owned {
         bytes memory _block_header_rlp = block_header_rlp[last_eth_block_number];
 
         // Verify the state proof
-        (
-            Point memory point,
-            VotedSlope memory votedSlope,
-            uint256 lastVote,
-            uint256 blockNumber,
-            bytes32 stateRootHash
-        ) = _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
-
+        (Point memory point, VotedSlope memory votedSlope, uint256 lastVote, uint256 blockNumber, bytes32 stateRootHash)
+        = _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
 
         pointWeights[_gauge][blockNumber] = point;
         voteUserSlope[blockNumber][_user][_gauge] = votedSlope;

@@ -7,6 +7,9 @@ import "forge-std/Script.sol";
 import {Platform} from "src/Platform.sol";
 import {AxelarExecutable} from "src/AxelarExecutable.sol";
 import {CurveOracle} from "src/oracles/CurveOracle.sol";
+import {BalancerOracle} from "src/oracles/BalancerOracle.sol";
+import {FraxOracle} from "src/oracles/FraxOracle.sol";
+import {FXNOracle} from "src/oracles/FXNOracle.sol";
 
 abstract contract DeployMulti is Script, Utils {
     address internal constant DEPLOYER = 0x8898502BA35AB64b3562aBC509Befb7Eb178D4df;
@@ -14,7 +17,7 @@ abstract contract DeployMulti is Script, Utils {
 
     address internal constant _AXELAR_GATEWAY = 0xe432150cce91c13a887f7D836923d5597adD8E31;
 
-    // GAUGES 
+    // GAUGES
     address internal constant CURVE_GAUGE_CONTROLLER = 0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB;
     address internal constant BALANCER_GAUGE_CONTROLLER = 0xC128468b7Ce63eA702C1f104D55A2566b13D3ABD;
     address internal constant FRAX_GAUGE_CONTROLLER = 0x3669C421b77340B2979d1A00a792CC2ee0FcE737;
@@ -29,10 +32,19 @@ abstract contract DeployMulti is Script, Utils {
 
         // Deploy oracles for Curve, Balancer, Frax, FXN
         CurveOracle curve_oracle = new CurveOracle(address(0), CURVE_GAUGE_CONTROLLER);
-        CurveOracle balancer_oracle = new CurveOracle(address(0), BALANCER_GAUGE_CONTROLLER);
-        CurveOracle frax_oracle = new CurveOracle(address(0), FRAX_GAUGE_CONTROLLER);
-        CurveOracle fxn_oracle = new CurveOracle(address(0), FXN_GAUGE_CONTROLLER);
+        BalancerOracle balancer_oracle = new BalancerOracle(address(0), BALANCER_GAUGE_CONTROLLER);
+        FraxOracle frax_oracle = new FraxOracle(address(0), FRAX_GAUGE_CONTROLLER);
+        FXNOracle fxn_oracle = new FXNOracle(address(0), FXN_GAUGE_CONTROLLER);
 
+        uint256 blockNumber = 20179427;
+        bytes32 blockHash = 0xe5dca003b61793be8d7660059f9d34e1c8d774878ecf0759fa4ec712302dd9c6;
+
+        curve_oracle.setEthBlockHash(blockNumber, blockHash);
+        balancer_oracle.setEthBlockHash(blockNumber, blockHash);
+        frax_oracle.setEthBlockHash(blockNumber, blockHash);
+        fxn_oracle.setEthBlockHash(blockNumber, blockHash);
+
+        /*
         address[] memory oracles = new address[](4);
         oracles[0] = address(curve_oracle);
         oracles[1] = address(balancer_oracle);
@@ -51,7 +63,7 @@ abstract contract DeployMulti is Script, Utils {
         Platform balancer_platform = new Platform(address(balancer_oracle), DEPLOYER, DEPLOYER);
         Platform frax_platform = new Platform(address(frax_oracle), DEPLOYER, DEPLOYER);
         Platform fxn_platform = new Platform(address(fxn_oracle), DEPLOYER, DEPLOYER);
-
+        
 
         // Whitelist Liquid Wrappers
         curve_platform.whitelistAddress(STAKE_LOCKER, true);
@@ -88,6 +100,8 @@ abstract contract DeployMulti is Script, Utils {
         console.log("Balancer:", address(balancer_platform));
         console.log("Frax:", address(frax_platform));
         console.log("FXN:", address(fxn_platform));
+
+        */
 
         console.log("Deployed Oracles:");
         console.log("Curve:", address(curve_oracle));

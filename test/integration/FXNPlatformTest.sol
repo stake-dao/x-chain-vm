@@ -32,7 +32,7 @@ contract FXNPlatformTest is BasePlatformTest {
         super.setUp();
 
         _user = 0x75736518075a01034fa72D675D36a47e9B06B2Fb;
-        _user2 = 0xf3e0974A5fEcFE4173e454993406243B2188EeeD ;
+        _user2 = 0xf3e0974A5fEcFE4173e454993406243B2188EeeD;
         _gauge = 0x61F32964C39Cca4353144A6DB2F8Efdb3216b35B;
         _blacklisted = 0xc40549aa1D05C30af23a1C4a5af6bA11FCAFe23F;
         _deployer = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;

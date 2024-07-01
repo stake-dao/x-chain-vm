@@ -3,9 +3,7 @@ pragma solidity 0.8.20;
 
 import {IAxelarGateway} from "src/interfaces/IAxelarGateway.sol";
 
-
 contract MockAxelarGateway is IAxelarGateway {
-
     struct DestinationData {
         string chain;
         string storedAddress;
@@ -17,18 +15,16 @@ contract MockAxelarGateway is IAxelarGateway {
 
     constructor() {}
 
-    function callContract(
-        string memory _destinationChain,
-        string memory _destinationAddress,
-        bytes memory _payload
-    ) external {
+    function callContract(string memory _destinationChain, string memory _destinationAddress, bytes memory _payload)
+        external
+    {
         DestinationData storage destination = destinations[destinationsCount++];
         destination.chain = _destinationChain;
         destination.storedAddress = _destinationAddress;
         destination.payload = _payload;
     }
 
-    // view to access destination 
+    // view to access destination
 
     function getDestination(uint256 index) external view returns (string memory, string memory, bytes memory) {
         return (destinations[index].chain, destinations[index].storedAddress, destinations[index].payload);
@@ -96,50 +92,32 @@ contract MockAxelarGateway is IAxelarGateway {
 
     function tokenDeployer() external view override returns (address) {}
 
-    function tokenMintLimit(
-        string memory symbol
-    ) external view override returns (uint256) {}
+    function tokenMintLimit(string memory symbol) external view override returns (uint256) {}
 
-    function tokenMintAmount(
-        string memory symbol
-    ) external view override returns (uint256) {}
+    function tokenMintAmount(string memory symbol) external view override returns (uint256) {}
 
     function allTokensFrozen() external view override returns (bool) {}
 
     function implementation() external view override returns (address) {}
 
-    function tokenAddresses(
-        string memory symbol
-    ) external view override returns (address) {}
+    function tokenAddresses(string memory symbol) external view override returns (address) {}
 
-    function tokenFrozen(
-        string memory symbol
-    ) external view override returns (bool) {}
+    function tokenFrozen(string memory symbol) external view override returns (bool) {}
 
-    function isCommandExecuted(
-        bytes32 commandId
-    ) external view override returns (bool) {}
+    function isCommandExecuted(bytes32 commandId) external view override returns (bool) {}
 
     function adminEpoch() external view override returns (uint256) {}
 
-    function adminThreshold(
-        uint256 epoch
-    ) external view override returns (uint256) {}
+    function adminThreshold(uint256 epoch) external view override returns (uint256) {}
 
-    function admins(
-        uint256 epoch
-    ) external view override returns (address[] memory) {}
+    function admins(uint256 epoch) external view override returns (address[] memory) {}
 
-    function setTokenMintLimits(
-        string[] calldata symbols,
-        uint256[] calldata limits
-    ) external override {}
+    function setTokenMintLimits(string[] calldata symbols, uint256[] calldata limits) external override {}
 
-    function upgrade(
-        address newImplementation,
-        bytes32 newImplementationCodeHash,
-        bytes calldata setupParams
-    ) external override {}
+    function upgrade(address newImplementation, bytes32 newImplementationCodeHash, bytes calldata setupParams)
+        external
+        override
+    {}
 
     function setup(bytes calldata params) external override {}
 

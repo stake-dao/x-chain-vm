@@ -100,8 +100,7 @@ contract ProofExtractorTest is Utils {
         fraxOracle.submit_state(_fraxUser, _fraxGauge, _block_header_rlp, _proof_rlp);
 
         /// Retrive the values from the oracle.
-        (uint256 slope, uint256 power, uint256 end) =
-            fraxOracle.voteUserSlope(block.number, _fraxUser, _fraxGauge);
+        (uint256 slope, uint256 power, uint256 end) = fraxOracle.voteUserSlope(block.number, _fraxUser, _fraxGauge);
 
         assertEq(last_user_vote, fraxOracle.lastUserVote(block.number, _fraxUser, _fraxGauge));
 

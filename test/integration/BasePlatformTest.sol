@@ -366,7 +366,7 @@ abstract contract BasePlatformTest is Utils {
         // Calculate blacklisted bias before sending proof.
         uint256 _bBias = _gaugeController.vote_user_slopes(_blacklisted, _gauge).slope
             * (_gaugeController.vote_user_slopes(_blacklisted, _gauge).end - _getCurrentPeriod());
-        
+
         (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
 
         (,, bytes memory _blacklisted_proof_rlp) = encodeProofs(_gauge, _blacklisted);
