@@ -5,6 +5,7 @@ import {Owned} from "solmate/auth/Owned.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {RLPReader} from "src/merkle-utils/RLPReader.sol";
 import {StateProofVerifier as Verifier} from "src/merkle-utils/StateProofVerifier.sol";
+import 'forge-std/console.sol';
 
 abstract contract BaseGaugeControllerOracle is Owned {
     using RLPReader for bytes;
@@ -32,7 +33,6 @@ abstract contract BaseGaugeControllerOracle is Owned {
     error NOT_OWNER();
     error INVALID_HASH();
     error WRONG_CONTEXT();
-    error WRONG_DECODING();
     error WRONG_SOURCE_CHAIN();
     error WRONG_SOURCE_ADDRESS();
     error INVALID_BLOCK_HEADER();
@@ -105,10 +105,6 @@ abstract contract BaseGaugeControllerOracle is Owned {
             bytes32 stateRootHash
         ) = _extractProofState(_user, _gauge, _block_header_rlp, _proof_rlp);
 
-        if (
-            point.bias == 0 || point.slope == 0 || votedSlope.slope == 0 || votedSlope.power == 0
-                || votedSlope.end == 0 || lastVote == 0 || blockNumber == 0
-        ) revert WRONG_DECODING();
 
         pointWeights[_gauge][blockNumber] = point;
         voteUserSlope[blockNumber][_user][_gauge] = votedSlope;
