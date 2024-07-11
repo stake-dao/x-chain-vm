@@ -56,7 +56,7 @@ abstract contract BasePlatformTest is Utils {
     string forkRpc = "https://eth.public-rpc.com";
 
     function setUp() public virtual {
-        uint256 forkId = vm.createFork(forkRpc);
+        uint256 forkId = vm.createFork(forkRpc, blockNumber);
         vm.selectFork(forkId);
 
         _gateway = new AxelarGateway();

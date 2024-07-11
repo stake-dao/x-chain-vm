@@ -22,12 +22,10 @@ contract PancakePlatformTest is BasePlatformTest {
         // vote 2 july
         //blockNumber = 40134996; // 2 july
         // block number = 3 july
-        //blockNumber = 40_346_451; // Wednesday 10 July (proof block number)
+        blockNumber = 40_346_451; // Wednesday 10 July (proof block number)
         startPeriodBlockNumber = 40_371_981; // Thursday 11 July (proof block number)
         forkRpc = "bsc";
         chainId = 56;
-
-        //blockNumber = 40_346_451; // Wednesday 10 July
 
         super.setUp();
 
