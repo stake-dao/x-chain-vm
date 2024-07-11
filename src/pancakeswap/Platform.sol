@@ -433,6 +433,38 @@ contract Platform is Owned, ReentrancyGuard {
         }
     }
 
+    /// @notice Claim rewards for a given bounty. (no proxy vote proof)
+    /// @param bountyId ID of the bounty.
+    /// @param proofUserVote User vote proof.
+    /// @return Amount of rewards claimed.
+    function claim(uint256 bountyId, ProofData memory proofUserVote) external returns (uint256) {
+        Platform.ProofData memory emptyProof = Platform.ProofData({
+            user: address(0),
+            headerRlp: "0x",
+            userProofRlp: "0x",
+            blackListedProofsRlp: new bytes[](0)
+        });
+        return _claim(bountyId, proofUserVote, emptyProof, emptyProof);
+    }
+
+    /// @notice Claim rewards for a given bounty. (no proxy owner proof)
+    /// @param bountyId ID of the bounty.
+    /// @param proofUserVote User vote proof.
+    /// @param proofProxyVote Proxy vote proof.
+    /// @return Amount of rewards claimed.
+    function claim(uint256 bountyId, ProofData memory proofUserVote, ProofData memory proofProxyVote)
+        external
+        returns (uint256)
+    {
+        Platform.ProofData memory emptyProof = Platform.ProofData({
+            user: address(0),
+            headerRlp: "0x",
+            userProofRlp: "0x",
+            blackListedProofsRlp: new bytes[](0)
+        });
+        return _claim(bountyId, proofUserVote, proofProxyVote, emptyProof);
+    }
+
     /// @notice Claim rewards for a given bounty.
     /// @param bountyId ID of the bounty.
     /// @param proofUserVote User vote proof.
@@ -1047,8 +1079,9 @@ contract Platform is Owned, ReentrancyGuard {
         // use gauge hash to extract proof
         //bytes32 gaugeHash = keccak256(abi.encodePacked(bounty.gauge, bounty.chainId));
 
-        (gaugeBias, userSlope, lastVote,) =
-            gaugeController.extractProofState(proofData.user, bounty.gauge, bounty.chainId, proofData.headerRlp, proofData.userProofRlp);
+        (gaugeBias, userSlope, lastVote,) = gaugeController.extractProofState(
+            proofData.user, bounty.gauge, bounty.chainId, proofData.headerRlp, proofData.userProofRlp
+        );
 
         if (
             userSlope.slope == 0 || lastUserClaim[proofData.user][bountyId] >= currentEpoch

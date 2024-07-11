@@ -49,43 +49,14 @@ contract PancakeOracle is BaseGaugeControllerOracle {
         bytes memory _proxy_owner_proof_rlp
     ) external {
         _submit_state(_user, _gauge, _chainId, block_header_rlp_, _user_proof_rlp);
-        //If not set for the last block number, set it
-        // if (block_header_rlp[last_eth_block_number].length == 0) {
-        //     if (block_header_rlp_.length == 0) revert INVALID_BLOCK_HEADER();
-        //     block_header_rlp[last_eth_block_number] = block_header_rlp_;
-        // }
-
-        //bytes memory _block_header_rlp = block_header_rlp[last_eth_block_number];
-
-        //Verify the state proof
-        // (Point memory point, VotedSlope memory votedSlope, uint256 lastVote, uint256 blockNumber, bytes32 stateRootHash)
-        // = _extractProofState(_user, _gauge, _chainId, _block_header_rlp, _user_proof_rlp);
-
-        //user vote
-        // voteUserSlope[blockNumber][_user][_gauge] = votedSlope;
-        // lastUserVote[blockNumber][_user][_gauge] = lastVote;
-        // isUserUpdated[blockNumber][_user][_gauge] = true;
 
         if (_proxy_proof_rlp.length > 0) {
             if (veCakeProxies[_user] == address(0)) {
                 // check the proxy ownership
                 (veCakeProxies[_user],,) = _extractVeCakeProofState(_user, block_header_rlp_, _proxy_owner_proof_rlp);
             }
-            _submit_state(_user, _gauge, _chainId, block_header_rlp_, _proxy_proof_rlp);
-
-                // (, votedSlope, lastVote,,)
-                // = _extractProofState(veCakeProxies[_user], _gauge, _chainId, _block_header_rlp, _proxy_proof_rlp);
-
-                // // proxy vote
-                // _user = veCakeProxies[_user];
-                // voteUserSlope[blockNumber][_user][_gauge] = votedSlope;
-                // lastUserVote[blockNumber][_user][_gauge] = lastVote;
-                // isUserUpdated[blockNumber][_user][_gauge] = true;
+            _submit_state(veCakeProxies[_user], _gauge, _chainId, block_header_rlp_, _proxy_proof_rlp);
         }
-
-        //pointWeights[_gauge][blockNumber] = point;
-
-        //_state_root_hash[blockNumber] = stateRootHash;
     }
 
     function _submit_state(

@@ -15,15 +15,13 @@ interface IGaugeVotingOracle {
 
     function activePeriod() external view returns (uint256);
 
-    function extractProofState(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
-        external
-        view
-        returns (Point memory, VotedSlope memory, uint256, uint256);
-    
-    function extractProofState(address _user, address _gauge, uint256 _chainId, bytes memory _block_header_rlp, bytes memory _proof_rlp)
-        external
-        view
-        returns (Point memory, VotedSlope memory, uint256, uint256);
+    function extractProofState(
+        address _user,
+        address _gauge,
+        uint256 _chainId,
+        bytes memory _block_header_rlp,
+        bytes memory _proof_rlp
+    ) external view returns (Point memory, VotedSlope memory, uint256, uint256);
 
     function extractVeCakeProofState(address _user, bytes memory _block_hheader_rlp, bytes memory _proof_rlp)
         external
@@ -40,24 +38,12 @@ interface IGaugeVotingOracle {
 
     function recipient(address _sender) external view returns (address);
 
-    function submit_state(address _user, address _gauge, bytes calldata _block_header_rlp, bytes calldata _proof_rlp)
-        external;
-
     function submit_state(
         address _user,
         address _gauge,
         uint256 _chainId,
         bytes calldata _block_header_rlp,
         bytes calldata _proof_rlp
-    ) external;
-
-    function submit_state(
-        address _user,
-        address _gauge,
-        bytes calldata _block_header_rlp,
-        bytes calldata _user_proof_rlp,
-        bytes calldata _proxy_proof_rlp,
-        bytes calldata _proxy_owner_proof_rlp
     ) external;
 
     function veCakeProxy(address _user) external view returns (address);
