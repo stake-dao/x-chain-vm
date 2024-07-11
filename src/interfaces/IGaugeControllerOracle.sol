@@ -42,4 +42,9 @@ interface IGaugeControllerOracle {
         external
         view
         returns (Point memory, VotedSlope memory, uint256, uint256);
+    
+    function extractProofState(address _user, address _gauge, uint256 _chainId, bytes memory _block_header_rlp, bytes memory _proof_rlp)
+        external
+        view
+        returns (Point memory, VotedSlope memory, uint256, uint256);
 }

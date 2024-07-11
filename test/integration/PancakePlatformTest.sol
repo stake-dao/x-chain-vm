@@ -185,7 +185,7 @@ contract PancakePlatformTest is BasePlatformTest {
         });
 
         uint256 claimable = pancakePlatform.claimable(_id, _userVoteProof, _proxyVoteProof);
-        emit log_uint(claimable);
+        assertGt(claimable, 0);
         uint256 claimed = pancakePlatform.claim(_id, _userVoteProof, _proxyVoteProof, _proxyOwnerProof);
         assertGt(claimed, 0);
         // uint256 claimableOnClaimable = platformClaimable.claimable(platform, _id, _proofData);

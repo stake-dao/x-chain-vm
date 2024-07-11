@@ -559,7 +559,7 @@ contract Platform is Owned, ReentrancyGuard {
             lastVote = gaugeController.lastUserVote(snapshotBlock, proofData.user, bounty.gauge);
         } else {
             (, userSlope, lastVote,) = gaugeController.extractProofState(
-                proofData.user, bounty.gauge, proofData.headerRlp, proofData.userProofRlp
+                proofData.user, bounty.gauge, bounty.chainId, proofData.headerRlp, proofData.userProofRlp
             );
         }
 
@@ -1045,10 +1045,10 @@ contract Platform is Owned, ReentrancyGuard {
         IGaugeVotingOracle.VotedSlope memory userSlope;
 
         // use gauge hash to extract proof
-        bytes32 gaugeHash = keccak256(abi.encodePacked(bounty.gauge, bounty.chainId));
+        //bytes32 gaugeHash = keccak256(abi.encodePacked(bounty.gauge, bounty.chainId));
 
         (gaugeBias, userSlope, lastVote,) =
-            gaugeController.extractProofState(proofData.user, bounty.gauge, proofData.headerRlp, proofData.userProofRlp);
+            gaugeController.extractProofState(proofData.user, bounty.gauge, bounty.chainId, proofData.headerRlp, proofData.userProofRlp);
 
         if (
             userSlope.slope == 0 || lastUserClaim[proofData.user][bountyId] >= currentEpoch

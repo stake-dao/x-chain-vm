@@ -71,7 +71,7 @@ contract PancakeOracle is BaseGaugeControllerOracle {
                 // check the proxy ownership
                 (veCakeProxies[_user],,) = _extractVeCakeProofState(_user, block_header_rlp_, _proxy_owner_proof_rlp);
             }
-            _submit_state(_user, _gauge, block_header_rlp_, _proxy_proof_rlp);
+            _submit_state(_user, _gauge, _chainId, block_header_rlp_, _proxy_proof_rlp);
 
                 // (, votedSlope, lastVote,,)
                 // = _extractProofState(veCakeProxies[_user], _gauge, _chainId, _block_header_rlp, _proxy_proof_rlp);
