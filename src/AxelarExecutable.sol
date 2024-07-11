@@ -41,7 +41,7 @@ contract AxelarExecutable is IAxelarExecutable, Owned {
         internal
         override
     {
-        if (!sourceChain.eq("Ethereum")) revert WRONG_SOURCE_CHAIN();
+        //if (!sourceChain.eq("Ethereum")) revert WRONG_SOURCE_CHAIN();
         if (!sourceAddress.eq(strEss)) revert WRONG_SOURCE_ADDRESS();
 
         for (uint256 i = 0; i < oracles.length; i++) {

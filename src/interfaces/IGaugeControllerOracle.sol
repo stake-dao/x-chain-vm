@@ -30,6 +30,14 @@ interface IGaugeControllerOracle {
     function submit_state(address _user, address _gauge, bytes calldata _block_header_rlp, bytes calldata _proof_rlp)
         external;
 
+    function submit_state(
+        address _user,
+        address _gauge,
+        uint256 _chainId,
+        bytes calldata _block_header_rlp,
+        bytes calldata _proof_rlp
+    ) external;
+
     function extractProofState(address _user, address _gauge, bytes memory _block_header_rlp, bytes memory _proof_rlp)
         external
         view

@@ -53,15 +53,17 @@ abstract contract BasePlatformTest is Utils {
     uint256 internal blockNumber;
     uint256 internal startPeriodBlockNumber;
 
+    string forkRpc = "https://eth.public-rpc.com";
+
     function setUp() public virtual {
-        uint256 forkId = vm.createFork("https://eth.public-rpc.com", blockNumber);
+        uint256 forkId = vm.createFork(forkRpc);
         vm.selectFork(forkId);
 
         _gateway = new AxelarGateway();
         rewardToken = new MockERC20("Token", "TKO", 18);
     }
 
-    function testMultipleOraclesReceivePayload() public {
+    function testMultipleOraclesReceivePayload() public virtual {
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
             sender.generateEthProofParams(_user, _gauge, _getCurrentPeriod());
@@ -98,7 +100,7 @@ abstract contract BasePlatformTest is Utils {
         BaseGaugeControllerOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
     }
 
-    function testWhitelist() public {
+    function testWhitelist() public virtual {
         platform.whitelistAddress(_user, true);
         assertTrue(platform.whitelisted(_user));
 
@@ -106,7 +108,7 @@ abstract contract BasePlatformTest is Utils {
         assertFalse(platform.whitelisted(_user));
     }
 
-    function testWhitelistWrongAuth() public {
+    function testWhitelistWrongAuth() public virtual {
         // Random User
         vm.prank(address(0x1));
         vm.expectRevert("UNAUTHORIZED");
@@ -115,9 +117,9 @@ abstract contract BasePlatformTest is Utils {
         assertFalse(platform.whitelisted(_user));
     }
 
-    function testSetBlockHash() public {
+    function testSetBlockHash() public virtual {
         // Create Default Bounty.
-        _gaugeController.checkpoint_gauge(_gauge);
+        _checkpointGauge(_gauge);
 
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
@@ -131,9 +133,9 @@ abstract contract BasePlatformTest is Utils {
         assertEq(CurveOracle(oracles[0]).activePeriod(), _getCurrentPeriod());
     }
 
-    function testSetBlockHashAlreadySet() public {
+    function testSetBlockHashAlreadySet() public virtual {
         // Create Default Bounty.
-        _gaugeController.checkpoint_gauge(_gauge);
+        _checkpointGauge(_gauge);
 
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
@@ -151,9 +153,9 @@ abstract contract BasePlatformTest is Utils {
         CurveOracle(oracles[0]).setEthBlockHash(_blockNumber, _block_hash);
     }
 
-    function testSetBlockHashWithAxelar() public {
+    function testSetBlockHashWithAxelar() public virtual {
         // Create Default Bounty.
-        _gaugeController.checkpoint_gauge(_gauge);
+        _checkpointGauge(_gauge);
 
         // Build the proof.
         (,,, uint256[6] memory _positions, uint256 _blockNumber) =
@@ -174,10 +176,10 @@ abstract contract BasePlatformTest is Utils {
         assertEq(CurveOracle(oracles[0]).activePeriod(), _getCurrentPeriod());
     }
 
-    function testClaimable() public {
+    function testClaimable() public virtual {
         // Create Default Bounty.
         uint256 _id = _createDefaultBounty(1 weeks);
-        _gaugeController.checkpoint_gauge(_gauge);
+        _checkpointGauge(_gauge);
 
         skip(1 days);
 
@@ -214,10 +216,10 @@ abstract contract BasePlatformTest is Utils {
         assertEq(claimableOnClaimable, 0);
     }
 
-    function testClaimBribeWithWhitelistedRecipientNotSet() public {
+    function testClaimBribeWithWhitelistedRecipientNotSet() public virtual {
         // Create Default Bounty.
         uint256 _id = _createDefaultBounty(1 weeks);
-        _gaugeController.checkpoint_gauge(_gauge);
+        _checkpointGauge(_gauge);
 
         skip(1 days);
 
@@ -239,10 +241,10 @@ abstract contract BasePlatformTest is Utils {
         platform.claim(_id, _proofData);
     }
 
-    function testClaimBribeWithRecipientSet() public {
+    function testClaimBribeWithRecipientSet() public virtual {
         // Create Default Bounty.
         uint256 _id = _createDefaultBounty(1 weeks);
-        _gaugeController.checkpoint_gauge(_gauge);
+        _checkpointGauge(_gauge);
 
         skip(1 days);
 
@@ -275,10 +277,10 @@ abstract contract BasePlatformTest is Utils {
         assertEq(claimed, 0);
     }
 
-    function testClaimBribeWithWhitelistedRecipientSet() public {
+    function testClaimBribeWithWhitelistedRecipientSet() public virtual {
         // Create Default Bounty.
         uint256 _id = _createDefaultBounty(1 weeks);
-        _gaugeController.checkpoint_gauge(_gauge);
+        _checkpointGauge(_gauge);
 
         skip(1 days);
 
@@ -320,10 +322,10 @@ abstract contract BasePlatformTest is Utils {
         assertEq(claimable, 0);
     }
 
-    function testClaimBribe() public {
+    function testClaimBribe() public virtual {
         // Create Default Bounty.
         uint256 _id = _createDefaultBounty(1 weeks);
-        _gaugeController.checkpoint_gauge(_gauge);
+        _checkpointGauge(_gauge);
 
         skip(1 days);
 
@@ -356,10 +358,10 @@ abstract contract BasePlatformTest is Utils {
         assertEq(claimed, 0);
     }
 
-    function testClaimWithBlacklistedAddress() public {
+    function testClaimWithBlacklistedAddress() public virtual {
         // Create Default Bounty.
         uint256 _id = _createDefaultBountyWithBlacklist(2 weeks);
-        _gaugeController.checkpoint_gauge(_gauge);
+        _checkpointGauge(_gauge);
 
         skip(1 days);
 
@@ -393,10 +395,10 @@ abstract contract BasePlatformTest is Utils {
         assertEq(_bBias, _slope * (_bEnd - _getCurrentPeriod()));
     }
 
-    function testCloseBribe() public {
+    function testCloseBribe() public virtual {
         // Create Default Bounty.
         uint256 _id = _createDefaultBounty(3 weeks);
-        _gaugeController.checkpoint_gauge(_gauge);
+        _checkpointGauge(_gauge);
 
         (bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
 
@@ -419,10 +421,10 @@ abstract contract BasePlatformTest is Utils {
         assertEq(rewardToken.balanceOf(_user), 0);
     }
 
-    function testClaimMultipleTimes() public {
+    function testClaimMultipleTimes() public virtual {
         // Create Default Bounty.
         uint256 _id = _createDefaultBounty(1 weeks);
-        _gaugeController.checkpoint_gauge(_gauge);
+        _checkpointGauge(_gauge);
 
         skip(1 days);
 
@@ -480,6 +482,10 @@ abstract contract BasePlatformTest is Utils {
         returns (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp)
     {}
 
+    function _checkpointGauge(address gauge) internal virtual {
+        _gaugeController.checkpoint_gauge(gauge);
+    }
+
     function _createCustomBribe(
         address gauge,
         address _rewardToken,
@@ -496,7 +502,7 @@ abstract contract BasePlatformTest is Utils {
         _overrideBountyPeriod(_id, numberOfWeeks);
     }
 
-    function _createDefaultBounty(uint256 numberOfWeeks) internal returns (uint256 _id) {
+    function _createDefaultBounty(uint256 numberOfWeeks) internal virtual returns (uint256 _id) {
         _id = platform.createBounty(_gauge, _user, address(rewardToken), 2, 2e18, _amount, new address[](0), true);
         //_overrideBountyPeriod(_id, numberOfWeeks);
     }

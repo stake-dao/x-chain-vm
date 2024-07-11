@@ -86,6 +86,7 @@ abstract contract BaseGaugeControllerOracle is Owned {
 
     function submit_state(address _user, address _gauge, bytes memory block_header_rlp_, bytes memory _proof_rlp)
         external
+        virtual
     {
         // If not set for the last block number, set it
         if (block_header_rlp[last_eth_block_number].length == 0) {
