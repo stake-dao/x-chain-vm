@@ -726,18 +726,44 @@ contract Platform is Owned, ReentrancyGuard {
     /// @param proofUserVote User vote proof.
     /// @param proofProxyVote Proxy vote proof.
     /// @dev Returns only claimable for current week. For previous weeks rewards, if it was checkpointed, use `checkpointedBalances`
-    /// @return amount of rewards.
     /// Mainly used for UI.
     function claimable(uint256 bountyId, ProofData memory proofUserVote, ProofData memory proofProxyVote)
         external
         view
+        returns (uint256)
+    {
+        return _claimable(bountyId, proofUserVote, proofProxyVote);
+    }
+
+    /// @notice Get an estimate of the reward amount for a given user (no proxy).
+    /// @param bountyId ID of the bounty.
+    /// @param proofUserVote User vote proof.
+    /// @dev Returns only claimable for current week. For previous weeks rewards, if it was checkpointed, use `checkpointedBalances`
+    /// Mainly used for UI.
+    function claimable(uint256 bountyId, ProofData memory proofUserVote) external view returns (uint256) {
+        ProofData memory proofProxyVote;
+        return _claimable(bountyId, proofUserVote, proofProxyVote);
+    }
+
+    /// @notice Get an estimate of the reward amount for a given user.
+    /// @param _bountyId ID of the bounty.
+    /// @param _proofUserVote User vote proof.
+    /// @param _proofProxyVote Proxy vote proof.
+    /// @dev Returns only claimable for current week. For previous weeks rewards, if it was checkpointed, use `checkpointedBalances`
+    /// @return amount of rewards.
+    /// Mainly used for UI.
+    function _claimable(uint256 _bountyId, ProofData memory _proofUserVote, ProofData memory _proofProxyVote)
+        internal
+        view
         returns (uint256 amount)
     {
-        if (proofProxyVote.user != address(0)) {
-            amount += _activeClaimable(proofProxyVote, bountyId);
+        if (_proofUserVote.user != address(0)) {
+            amount += _activeClaimable(_proofUserVote, _bountyId);
         }
 
-        amount += _activeClaimable(proofUserVote, bountyId);
+        if (_proofProxyVote.user != address(0)) {
+            amount += _activeClaimable(_proofProxyVote, _bountyId);
+        }
     }
 
     ////////////////////////////////////////////////////////////////

@@ -139,18 +139,10 @@ contract PancakePlatformTest is BasePlatformTest {
         // 4 July
 
         (bytes32 _blockHash, bytes memory block_header_rlp, bytes memory proof_rlp) =
-            getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), startPeriodBlockNumber);
-        //(bytes32 block_hash, bytes memory block_header_rlp, bytes memory proof_rlp) = encodeProofs(_gauge, _user);
+            getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), startPeriodBlockNumber, _user);
 
         // Submit ETH Block Hash to Oracle.
         BaseGaugeControllerOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, _blockHash);
-
-        // submit state
-        // bytes memory proxyProof;
-        // bytes memory proxyOwnerProof;
-        // PancakeOracle(oracles[0]).submit_state(
-        //     _user, _gauge, chainId, block_header_rlp, proof_rlp, proxyProof, proxyProof
-        // );
 
         // No need to submit it.
         Platform.ProofData memory _userVoteProof = Platform.ProofData({
@@ -190,19 +182,184 @@ contract PancakePlatformTest is BasePlatformTest {
         assertEq(claimed, 0);
     }
 
-    function testClaimBribeWithWhitelistedRecipientNotSet() public override {}
+    function testClaimBribeWithWhitelistedRecipientNotSet() public override {
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
+        _checkpointGauge(_gauge);
 
-    function testClaimBribeWithRecipientSet() public override {}
+        skip(10 days);
 
-    function testClaimBribeWithWhitelistedRecipientSet() public override {}
+        (bytes32 _blockHash, bytes memory block_header_rlp, bytes memory proof_rlp) =
+            getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), startPeriodBlockNumber, _user);
 
-    function testClaimBribe() public override {}
+        // Submit ETH Block Hash to Oracle.
+        BaseGaugeControllerOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, _blockHash);
+        pancakePlatform.whitelistAddress(_user, true);
 
-    function testClaimWithBlacklistedAddress() public override {}
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
 
-    function testCloseBribe() public override {}
+        vm.expectRevert(Platform.NO_RECEIVER_SET_FOR_WHITELISTED.selector);
+        pancakePlatform.claim(_id, _proofData);
+    }
+
+    function testClaimBribeWithRecipientSet() public override {
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
+        _checkpointGauge(_gauge);
+
+        skip(10 days);
+
+        (bytes32 _blockHash, bytes memory block_header_rlp, bytes memory proof_rlp) =
+            getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), startPeriodBlockNumber, _user);
+
+        // Submit ETH Block Hash to Oracle.
+        PancakeOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, _blockHash);
+
+        address FAKE_RECIPIENT = address(0xCACA);
+        PancakeOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimed = pancakePlatform.claim(_id, _proofData);
+
+        assertGt(claimed, 0);
+
+        assertEq(rewardToken.balanceOf(_user), 0);
+        assertEq(rewardToken.balanceOf(FAKE_RECIPIENT), claimed);
+
+        assertGt(pancakePlatform.rewardPerVote(_id), 0);
+
+        claimed = pancakePlatform.claim(_id, _proofData);
+        assertEq(claimed, 0);
+    }
+
+    function testClaimBribeWithWhitelistedRecipientSet() public override {
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
+        _checkpointGauge(_gauge);
+
+        skip(10 days);
+
+        // Build the proof.
+        (bytes32 _blockHash, bytes memory block_header_rlp, bytes memory proof_rlp) =
+            getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), startPeriodBlockNumber, _user);
+
+        // Submit ETH Block Hash to Oracle.
+        PancakeOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, _blockHash);
+
+        pancakePlatform.whitelistAddress(_user, true);
+
+        address FAKE_RECIPIENT = address(0xCACA);
+        PancakeOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimable = pancakePlatform.claimable(_id, _proofData);
+        uint256 claimed = pancakePlatform.claim(_id, _proofData);
+
+        assertGt(claimed, 0);
+        assertGt(claimable, 0);
+        assertApproxEqRel(claimed, claimable, 1e15);
+
+        assertEq(rewardToken.balanceOf(_user), 0);
+        assertEq(rewardToken.balanceOf(FAKE_RECIPIENT), claimed);
+
+        assertGt(pancakePlatform.rewardPerVote(_id), 0);
+
+        claimed = pancakePlatform.claim(_id, _proofData);
+        claimable = pancakePlatform.claimable(_id, _proofData);
+
+        assertEq(claimed, 0);
+        assertEq(claimable, 0);
+    }
+
+    function testClaimBribe() public override {
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(1 weeks);
+        _checkpointGauge(_gauge);
+
+        skip(10 days);
+
+        // Build the proof.
+        (bytes32 _blockHash, bytes memory block_header_rlp, bytes memory proof_rlp) =
+            getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), startPeriodBlockNumber, _user);
+
+        // Submit ETH Block Hash to Oracle.
+        PancakeOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, _blockHash);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimable = pancakePlatform.claimable(_id, _proofData);
+        uint256 claimed = pancakePlatform.claim(_id, _proofData);
+
+        assertGt(claimed, 0);
+        assertGt(claimable, 0);
+        assertApproxEqRel(claimed, claimable, 1e15);
+
+        assertGt(pancakePlatform.rewardPerVote(_id), 0);
+
+        claimable = pancakePlatform.claimable(_id, _proofData);
+        claimed = pancakePlatform.claim(_id, _proofData);
+
+        assertEq(claimable, 0);
+        assertEq(claimed, 0);
+    }
+
+    function testCloseBribe() public override {
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(3 weeks);
+        _checkpointGauge(_gauge);
+
+        // Build the proof.
+        (bytes32 _blockHash, bytes memory block_header_rlp, bytes memory proof_rlp) =
+            getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), startPeriodBlockNumber, _user);
+
+        // Submit ETH Block Hash to Oracle.
+        PancakeOracle(oracles[0]).setEthBlockHash(startPeriodBlockNumber, _blockHash);
+
+        // No need to submit it.
+        Platform.ProofData memory _proofData = Platform.ProofData({
+            user: _user,
+            headerRlp: block_header_rlp,
+            userProofRlp: proof_rlp,
+            blackListedProofsRlp: new bytes[](0)
+        });
+
+        uint256 claimed = pancakePlatform.claim(_id, _proofData);
+        assertEq(claimed, 0);
+
+        vm.prank(_user);
+        pancakePlatform.closeBounty(_id);
+        assertEq(rewardToken.balanceOf(_user), 0);
+    }
 
     function testClaimMultipleTimes() public override {}
+
+    function testClaimWithBlacklistedAddress() public override {}
 
     function _createDefaultBounty(uint256 numberOfWeeks) internal override returns (uint256 _id) {
         _id = pancakePlatform.createBounty(
