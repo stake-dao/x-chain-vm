@@ -39,6 +39,17 @@ contract PancakeOracle is BaseGaugeControllerOracle {
         _submit_state(_user, _gauge, _chainId, block_header_rlp_, _user_proof_rlp);
     }
 
+    function submitProxyOwnershipProof(
+        address _user,
+        bytes memory block_header_rlp_,
+        bytes memory _proxy_owner_proof_rlp
+    ) external {
+        if (veCakeProxies[_user] == address(0)) {
+            // check the proxy ownership
+            (veCakeProxies[_user],,) = _extractVeCakeProofState(_user, block_header_rlp_, _proxy_owner_proof_rlp);
+        }
+    }
+
     function submit_state(
         address _user,
         address _gauge,
@@ -89,8 +100,9 @@ contract PancakeOracle is BaseGaugeControllerOracle {
     function extractVeCakeProofState(address _user, bytes memory _block_header_rlp, bytes memory _proof_rlp)
         external
         view
+        returns (address proxy, uint256 blockNumber, bytes32 stateRootHash)
     {
-        _extractVeCakeProofState(_user, _block_header_rlp, _proof_rlp);
+        return _extractVeCakeProofState(_user, _block_header_rlp, _proof_rlp);
     }
 
     function _extractVeCakeProofState(address _user, bytes memory _block_header_rlp, bytes memory _proof_rlp)
@@ -105,25 +117,25 @@ contract PancakeOracle is BaseGaugeControllerOracle {
         RLPReader.RLPItem[] memory proofs = _proof_rlp.toRlpItem().toList();
         if (proofs.length < 2) revert INVALID_PROOF_LENGTH();
 
-        stateRootHash = _state_root_hash[blockNumber];
-        if (stateRootHash == bytes32(0)) {
-            // 0th proof is the account proof for Gauge Controller contract
-            Verifier.Account memory ve_cake_account = Verifier.extractAccountFromProof(
-                VE_CAKE_HASH, // position of the account is the hash of its address
-                block_header.stateRootHash,
-                proofs[0].toList()
-            );
-            if (!ve_cake_account.exists) revert VE_CAKE_NOT_FOUND();
-            stateRootHash = ve_cake_account.storageRoot;
-        }
+        //stateRootHash = _state_root_hash[blockNumber];
+        //if (stateRootHash == bytes32(0)) {
+        // 0th proof is the account proof for VeCake contract
+        Verifier.Account memory ve_cake_account = Verifier.extractAccountFromProof(
+            VE_CAKE_HASH, // position of the account is the hash of its address
+            block_header.stateRootHash,
+            proofs[0].toList()
+        );
+        if (!ve_cake_account.exists) revert VE_CAKE_NOT_FOUND();
+        stateRootHash = ve_cake_account.storageRoot;
+        //}
 
         unchecked {
             // user's veCake proxy
             proxy = address(
                 uint160(
                     Verifier.extractSlotValueFromProof(
-                        keccak256(abi.encode(uint256(keccak256(abi.encode(_user, 10))) + 0)),
-                        stateRootHash,
+                        keccak256(abi.encode(uint256(keccak256(abi.encode(_user, 8))))),
+                        ve_cake_account.storageRoot,
                         proofs[1].toList()
                     ).value
                 )

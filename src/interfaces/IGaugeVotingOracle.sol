@@ -46,7 +46,7 @@ interface IGaugeVotingOracle {
         bytes calldata _proof_rlp
     ) external;
 
-    function veCakeProxy(address _user) external view returns (address);
+    function veCakeProxies(address _user) external view returns (address);
 
     function voteUserSlope(uint256 _block, address _user, address _gauge) external view returns (VotedSlope memory);
 }

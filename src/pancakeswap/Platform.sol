@@ -211,6 +211,11 @@ contract Platform is Owned, ReentrancyGuard {
         _;
     }
 
+    modifier onlyUserOrOwner(address _user) {
+        if (msg.sender != _user && msg.sender != owner) revert AUTH_USER_OWNER_ONLY();
+        _;
+    }
+
     ////////////////////////////////////////////////////////////////
     /// --- EVENTS
     ///////////////////////////////////////////////////////////////
@@ -324,9 +329,11 @@ contract Platform is Owned, ReentrancyGuard {
     error USER_NOT_UPDATED();
     error NOT_UPGRADEABLE();
     error AUTH_MANAGER_ONLY();
+    error AUTH_USER_OWNER_ONLY();
     error INVALID_NUMBER_OF_EPOCHS();
     error NO_RECEIVER_SET_FOR_WHITELISTED();
     error WRONG_PROXY_PROOF();
+    error VECAKE_PROXY();
 
     ////////////////////////////////////////////////////////////////
     /// --- CONSTRUCTOR
@@ -419,12 +426,12 @@ contract Platform is Owned, ReentrancyGuard {
         // Add the addresses to the blacklist.
         uint256 length = blacklist.length;
         for (uint256 i = 0; i < length;) {
-            // Retrieve if user has Cake Pool Proxy
-            // (,, address cakePoolProxy,,,,,) = escrow.getUserInfo(blacklist[i]);
+            // Retrieve if user has Cake Pool Proxy stored on oracle
+            address cakePoolProxy = gaugeController.veCakeProxies(blacklist[i]);
 
-            // if (cakePoolProxy != address(0)) {
-            //     isBlacklisted[newBountyId][cakePoolProxy] = true;
-            // }
+            if (cakePoolProxy != address(0)) {
+                isBlacklisted[newBountyId][cakePoolProxy] = true;
+            }
 
             isBlacklisted[newBountyId][blacklist[i]] = true;
             unchecked {
@@ -437,7 +444,11 @@ contract Platform is Owned, ReentrancyGuard {
     /// @param bountyId ID of the bounty.
     /// @param proofUserVote User vote proof.
     /// @return Amount of rewards claimed.
-    function claim(uint256 bountyId, ProofData memory proofUserVote) external returns (uint256) {
+    function claim(uint256 bountyId, ProofData memory proofUserVote)
+        external
+        onlyUserOrOwner(proofUserVote.user)
+        returns (uint256)
+    {
         Platform.ProofData memory emptyProof = Platform.ProofData({
             user: address(0),
             headerRlp: "0x",
@@ -454,6 +465,7 @@ contract Platform is Owned, ReentrancyGuard {
     /// @return Amount of rewards claimed.
     function claim(uint256 bountyId, ProofData memory proofUserVote, ProofData memory proofProxyVote)
         external
+        onlyUserOrOwner(proofUserVote.user)
         returns (uint256)
     {
         Platform.ProofData memory emptyProof = Platform.ProofData({
@@ -476,7 +488,7 @@ contract Platform is Owned, ReentrancyGuard {
         ProofData memory proofUserVote,
         ProofData memory proofProxyVote,
         ProofData memory proofProxyOwner
-    ) external returns (uint256) {
+    ) external onlyUserOrOwner(proofUserVote.user) returns (uint256) {
         return _claim(bountyId, proofUserVote, proofProxyVote, proofProxyOwner);
     }
 
@@ -485,24 +497,24 @@ contract Platform is Owned, ReentrancyGuard {
     /// @param proofsUserVote Array of user vote proof.
     /// @param proofsProxyVote Array of proxy vote proof.
     /// @param proofsProxyOwner Array of proxy ownership proof.
-    function claimAll(
-        uint256[] calldata ids,
-        ProofData[] calldata proofsUserVote,
-        ProofData[] calldata proofsProxyVote,
-        ProofData[] calldata proofsProxyOwner
-    ) external {
-        uint256 length = ids.length;
+    // function claimAll(
+    //     uint256[] calldata ids,
+    //     ProofData[] calldata proofsUserVote,
+    //     ProofData[] calldata proofsProxyVote,
+    //     ProofData[] calldata proofsProxyOwner
+    // ) external {
+    //     uint256 length = ids.length;
 
-        for (uint256 i = 0; i < length;) {
-            uint256 id = ids[i];
+    //     for (uint256 i = 0; i < length;) {
+    //         uint256 id = ids[i];
 
-            _claim(id, proofsUserVote[i], proofsProxyVote[i], proofsProxyOwner[i]);
+    //         _claim(id, proofsUserVote[i], proofsProxyVote[i], proofsProxyOwner[i]);
 
-            unchecked {
-                ++i;
-            }
-        }
-    }
+    //         unchecked {
+    //             ++i;
+    //         }
+    //     }
+    // }
 
     ////////////////////////////////////////////////////////////////
     /// --- INTERNAL LOGIC
@@ -529,12 +541,15 @@ contract Platform is Owned, ReentrancyGuard {
         Bounty storage bounty = bounties[bountyId];
 
         // Checking votes from user
-        amount += _getClaimable(proofUserVote, snapshotBlock, bounty, bountyId, currentEpoch);
+        if (proofUserVote.user != address(0)) {
+            // checking if it is a proxy
+            amount += _getClaimable(proofUserVote, snapshotBlock, bounty, bountyId, currentEpoch);
+        }
 
         // Checking the user's proxy ownership
         // claim for proxy
         if (proofProxyVote.user != address(0)) {
-            address cakePoolProxy = gaugeController.veCakeProxy(proofUserVote.user);
+            address cakePoolProxy = gaugeController.veCakeProxies(proofUserVote.user);
             if (cakePoolProxy == address(0)) {
                 (cakePoolProxy,,) = gaugeController.extractVeCakeProofState(
                     proofProxyOwner.user, proofProxyOwner.headerRlp, proofProxyOwner.userProofRlp

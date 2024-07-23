@@ -22,7 +22,7 @@ abstract contract Utils is Test {
         return abi.decode(vm.ffi(inputs), (bytes32, bytes, bytes));
     }
 
-    function getRLPEncodedProofsBsc(string memory _rpcUrl, uint256 _blockNumber, address _account)
+    function getRLPEncodedProofsBsc(string memory _rpcUrl, uint256 _blockNumber, string memory _account)
         internal
         returns (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp)
     {
@@ -31,7 +31,7 @@ abstract contract Utils is Test {
         inputs[1] = "test/python/get_proof_bsc.py";
         inputs[2] = _rpcUrl;
         inputs[3] = vm.toString(_blockNumber);
-        inputs[4] = vm.toString(_account);
+        inputs[4] = _account;
         emit log_string(inputs[4]);
         return abi.decode(vm.ffi(inputs), (bytes32, bytes, bytes));
     }
