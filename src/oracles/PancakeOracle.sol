@@ -117,8 +117,6 @@ contract PancakeOracle is BaseGaugeControllerOracle {
         RLPReader.RLPItem[] memory proofs = _proof_rlp.toRlpItem().toList();
         if (proofs.length < 2) revert INVALID_PROOF_LENGTH();
 
-        //stateRootHash = _state_root_hash[blockNumber];
-        //if (stateRootHash == bytes32(0)) {
         // 0th proof is the account proof for VeCake contract
         Verifier.Account memory ve_cake_account = Verifier.extractAccountFromProof(
             VE_CAKE_HASH, // position of the account is the hash of its address
@@ -126,8 +124,6 @@ contract PancakeOracle is BaseGaugeControllerOracle {
             proofs[0].toList()
         );
         if (!ve_cake_account.exists) revert VE_CAKE_NOT_FOUND();
-        stateRootHash = ve_cake_account.storageRoot;
-        //}
 
         unchecked {
             // user's veCake proxy

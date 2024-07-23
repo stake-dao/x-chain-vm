@@ -533,7 +533,13 @@ contract Platform is Owned, ReentrancyGuard {
         ProofData memory proofProxyOwner
     ) internal notKilled returns (uint256 amount) {
         // Update if needed the current period.
-        uint256 currentEpoch = _updateBountyPeriod(bountyId, proofUserVote);
+        uint256 currentEpoch;
+        if (proofUserVote.userProofRlp.length > 0) {
+            currentEpoch = _updateBountyPeriod(bountyId, proofUserVote);
+        } else {
+            currentEpoch = _updateBountyPeriod(bountyId, proofProxyVote);
+        }
+        //uint256 currentEpoch = _updateBountyPeriod(bountyId, proofUserVote);
         uint256 snapshotBlock = gaugeController.last_eth_block_number();
 
         if (currentEpoch != gaugeController.activePeriod()) return 0;
@@ -541,16 +547,16 @@ contract Platform is Owned, ReentrancyGuard {
         Bounty storage bounty = bounties[bountyId];
 
         // Checking votes from user
-        if (proofUserVote.user != address(0)) {
+        if (proofUserVote.userProofRlp.length > 0) {
             // checking if it is a proxy
             amount += _getClaimable(proofUserVote, snapshotBlock, bounty, bountyId, currentEpoch);
         }
 
-        // Checking the user's proxy ownership
         // claim for proxy
         if (proofProxyVote.user != address(0)) {
             address cakePoolProxy = gaugeController.veCakeProxies(proofUserVote.user);
             if (cakePoolProxy == address(0)) {
+                // Checking the user's proxy ownership
                 (cakePoolProxy,,) = gaugeController.extractVeCakeProofState(
                     proofProxyOwner.user, proofProxyOwner.headerRlp, proofProxyOwner.userProofRlp
                 );
