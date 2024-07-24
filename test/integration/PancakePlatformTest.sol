@@ -6,7 +6,7 @@ import {LibString} from "solady/utils/LibString.sol";
 import {AxelarExecutable} from "src/AxelarExecutable.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {GaugeController} from "src/interfaces/GaugeController.sol";
-import {EthereumStateSender} from "src/EthereumStateSender.sol";
+import {BnbStateSender} from "src/BnbStateSender.sol";
 import {BaseGaugeControllerOracle} from "src/oracles/BaseGaugeControllerOracle.sol";
 import {PancakeOracle} from "src/oracles/PancakeOracle.sol";
 import {BasePlatformTest} from "test/integration/BasePlatformTest.sol";
@@ -16,7 +16,8 @@ contract PancakePlatformTest is BasePlatformTest {
 
     Platform internal pancakePlatform;
     uint256 internal chainId;
-    address _user_proxy;
+    address internal _user_proxy;
+    BnbStateSender internal bnbSender;
 
     function setUp() public override {
         blockNumber = 40518620; // 16 jul tuesday
@@ -28,14 +29,13 @@ contract PancakePlatformTest is BasePlatformTest {
 
         _user = 0x2dDd6fAb33eA2395A17C061533972E449a38A3c2;
         _user_proxy = 0xdf29565f309797e101a553471804073399242D71; // (proxy)
-        // _user2 = 0x6396551Ae5EdE9756aEE3354aF2b214Bf7531b26;
         _gauge = 0x9cac9745731d1Cf2B483f257745A512f0938DD01;
         _blacklisted = address(0xAABB);
         _deployer = 0x0dE5199779b43E13B3Bec21e91117E18736BC1A8;
 
         _gaugeController = GaugeController(0xf81953dC234cdEf1D6D0d3ef61b232C6bCbF9aeF);
 
-        sender = new EthereumStateSender(_deployer);
+        bnbSender = new BnbStateSender(_deployer, 0.003 ether, 0.001 ether);
 
         oracles = new address[](2);
         oracles[0] = address(new PancakeOracle(address(axelarExecutable), address(_gaugeController)));
@@ -53,8 +53,8 @@ contract PancakePlatformTest is BasePlatformTest {
     }
 
     function testSetBlockHash() public override {
-        (,,, uint256[6] memory _positions, uint256 _blockNumberUser) =
-            _generateBscProofParams(_user, _gauge, chainId, _getCurrentPeriod());
+        // test the call
+        _generateBscProofParams(_user, _gauge, chainId, _getCurrentPeriod());
 
         // Submit ETH Block Hash to Oracle.
         PancakeOracle(oracles[0]).setEthBlockHash(block.number, blockhash(block.number));
@@ -126,16 +126,13 @@ contract PancakePlatformTest is BasePlatformTest {
 
     function testClaimable() public override {
         // Create Default Bounty.
-        // 11 July (Thursday)
+        // 16 July (Tuesday)
         uint256 _id = _createDefaultBounty(1 weeks);
         _checkpointGauge(_gauge);
 
         skip(6 days);
 
-        // 27 June (first voting period)
-        // 2 July user vote date
-        // 4 July
-        emit log_uint(block.timestamp);
+        // 22 July
 
         (bytes32 _blockHash, bytes memory block_header_rlp, bytes memory proof_rlp) =
             getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), startPeriodBlockNumber, vm.toString(_user));
@@ -388,7 +385,7 @@ contract PancakePlatformTest is BasePlatformTest {
         (,, bytes memory proxy_proof_rlp) =
             getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), startPeriodBlockNumber, vm.toString(_user_proxy));
 
-        (bytes32 _blockHashOwnerProof, bytes memory block_header_owner_rlp, bytes memory proxy_owner_proof_rlp) =
+        (, bytes memory block_header_owner_rlp, bytes memory proxy_owner_proof_rlp) =
             getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), 40719951, "proxyOwnership");
 
         // Submit ETH Block Hash to Oracle.
@@ -434,7 +431,7 @@ contract PancakePlatformTest is BasePlatformTest {
         (,, bytes memory proxy_proof_rlp) =
             getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), startPeriodBlockNumber, vm.toString(_user_proxy));
 
-        (bytes32 _blockHashOwnerProof, bytes memory block_header_owner_rlp, bytes memory proxy_owner_proof_rlp) =
+        (, bytes memory block_header_owner_rlp, bytes memory proxy_owner_proof_rlp) =
             getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), 40719951, "proxyOwnership");
 
         // Submit ETH Block Hash to Oracle.
@@ -476,7 +473,7 @@ contract PancakePlatformTest is BasePlatformTest {
         (,, bytes memory proxy_proof_rlp) =
             getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), startPeriodBlockNumber, vm.toString(_user_proxy));
 
-        (bytes32 _blockHashOwnerProof, bytes memory block_header_owner_rlp, bytes memory proxy_owner_proof_rlp) =
+        (, bytes memory block_header_owner_rlp, bytes memory proxy_owner_proof_rlp) =
             getRLPEncodedProofsBsc(vm.rpcUrl("bsc"), 40719951, "proxyOwnership");
 
         // Submit ETH Block Hash to Oracle.
@@ -556,10 +553,10 @@ contract PancakePlatformTest is BasePlatformTest {
 
     function _generateBscProofParams(address _user, address _gauge, uint256 _chainId, uint256 _time)
         internal
-        returns (address, address, uint256, uint256[6] memory _positions, uint256)
+        pure
+        returns (address, address, uint256, uint256[6] memory _positions)
     {
         bytes32 gaugeHash = keccak256(abi.encodePacked(_gauge, _chainId));
-        emit log_bytes32(gaugeHash);
         uint256 lastUserVotePosition =
             uint256(keccak256(abi.encode(gaugeHash, keccak256(abi.encode(_user, 6000000011)))));
         _positions[0] = lastUserVotePosition;
@@ -575,10 +572,10 @@ contract PancakePlatformTest is BasePlatformTest {
         for (i = 0; i < 3; i++) {
             _positions[3 + i] = voteUserSlopePosition + i;
         }
-        return (_user, _gauge, _time, _positions, block.number);
+        return (_user, _gauge, _time, _positions);
     }
 
-    function _generateBscProxyOwnerProofParams(address _user) internal returns (uint256 _position) {
+    function _generateBscProxyOwnerProofParams(address _user) internal pure returns (uint256 _position) {
         _position = uint256(keccak256(abi.encode(_user, 8)));
     }
 }

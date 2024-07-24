@@ -124,6 +124,7 @@ contract PancakeOracle is BaseGaugeControllerOracle {
             proofs[0].toList()
         );
         if (!ve_cake_account.exists) revert VE_CAKE_NOT_FOUND();
+        stateRootHash = ve_cake_account.storageRoot;
 
         unchecked {
             // user's veCake proxy
@@ -131,7 +132,7 @@ contract PancakeOracle is BaseGaugeControllerOracle {
                 uint160(
                     Verifier.extractSlotValueFromProof(
                         keccak256(abi.encode(uint256(keccak256(abi.encode(_user, 8))))),
-                        ve_cake_account.storageRoot,
+                        stateRootHash,
                         proofs[1].toList()
                     ).value
                 )

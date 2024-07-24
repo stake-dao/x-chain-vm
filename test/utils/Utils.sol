@@ -32,7 +32,6 @@ abstract contract Utils is Test {
         inputs[2] = _rpcUrl;
         inputs[3] = vm.toString(_blockNumber);
         inputs[4] = _account;
-        emit log_string(inputs[4]);
         return abi.decode(vm.ffi(inputs), (bytes32, bytes, bytes));
     }
 
