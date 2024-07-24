@@ -30,7 +30,7 @@ abstract contract DeployPancakeXChain is Script {
         address[] memory oracles = new address[](1);
         oracles[0] = address(oracle);
 
-        axelarExecutable = new AxelarExecutable(axelarGateway, BNB_STATE_SENDER, oracles);
+        axelarExecutable = new AxelarExecutable(axelarGateway, BNB_STATE_SENDER, oracles, "Bsc");
         oracle.setAxelarExecutable(address(axelarExecutable));
 
         platform = new Platform(address(oracle), DEPLOYER, DEPLOYER);

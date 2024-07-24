@@ -41,7 +41,7 @@ contract PancakePlatformTest is BasePlatformTest {
         oracles[0] = address(new PancakeOracle(address(axelarExecutable), address(_gaugeController)));
         oracles[1] = address(new PancakeOracle(address(axelarExecutable), address(_gaugeController)));
 
-        axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), oracles);
+        axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), oracles, "Bsc");
 
         PancakeOracle(oracles[0]).setAxelarExecutable(address(axelarExecutable));
         PancakeOracle(oracles[1]).setAxelarExecutable(address(axelarExecutable));

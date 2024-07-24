@@ -19,16 +19,18 @@ contract AxelarExecutable is IAxelarExecutable, Owned {
     /// @notice Ethereum State Sender
     address public ess;
     string public strEss;
+    string public srcChain;
 
     event OracleSet(address[] oracles);
     event EssSet(address ess);
 
-    constructor(address _axelarGateway, address _sourceAddress, address[] memory _oracles)
+    constructor(address _axelarGateway, address _sourceAddress, address[] memory _oracles, string memory _srcChain)
         IAxelarExecutable(_axelarGateway)
         Owned(msg.sender)
     {
         oracles = _oracles;
         ess = _sourceAddress;
+        srcChain = _srcChain;
         strEss = _sourceAddress.toHexStringChecksumed();
     }
 
@@ -41,7 +43,7 @@ contract AxelarExecutable is IAxelarExecutable, Owned {
         internal
         override
     {
-        //if (!sourceChain.eq("Ethereum")) revert WRONG_SOURCE_CHAIN();
+        if (!sourceChain.eq(srcChain)) revert WRONG_SOURCE_CHAIN();
         if (!sourceAddress.eq(strEss)) revert WRONG_SOURCE_ADDRESS();
 
         for (uint256 i = 0; i < oracles.length; i++) {
