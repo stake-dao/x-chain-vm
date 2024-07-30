@@ -333,7 +333,6 @@ contract Platform is Owned, ReentrancyGuard {
     error INVALID_NUMBER_OF_EPOCHS();
     error NO_RECEIVER_SET_FOR_WHITELISTED();
     error WRONG_PROXY_PROOF();
-    error VECAKE_PROXY();
 
     ////////////////////////////////////////////////////////////////
     /// --- CONSTRUCTOR
@@ -391,7 +390,6 @@ contract Platform is Owned, ReentrancyGuard {
         }
 
         uint256 rewardPerPeriod = totalRewardAmount.mulDiv(1, numberOfEpochs);
-        //uint256 currentEpoch = getCurrentEpoch();
 
         bounties[newBountyId] = Bounty({
             gauge: gauge,
@@ -492,30 +490,6 @@ contract Platform is Owned, ReentrancyGuard {
         return _claim(bountyId, proofUserVote, proofProxyVote, proofProxyOwner);
     }
 
-    /// @notice Claim all rewards for multiple bounties.
-    /// @param ids Array of bounty IDs to claim.
-    /// @param proofsUserVote Array of user vote proof.
-    /// @param proofsProxyVote Array of proxy vote proof.
-    /// @param proofsProxyOwner Array of proxy ownership proof.
-    // function claimAll(
-    //     uint256[] calldata ids,
-    //     ProofData[] calldata proofsUserVote,
-    //     ProofData[] calldata proofsProxyVote,
-    //     ProofData[] calldata proofsProxyOwner
-    // ) external {
-    //     uint256 length = ids.length;
-
-    //     for (uint256 i = 0; i < length;) {
-    //         uint256 id = ids[i];
-
-    //         _claim(id, proofsUserVote[i], proofsProxyVote[i], proofsProxyOwner[i]);
-
-    //         unchecked {
-    //             ++i;
-    //         }
-    //     }
-    // }
-
     ////////////////////////////////////////////////////////////////
     /// --- INTERNAL LOGIC
     ///////////////////////////////////////////////////////////////
@@ -539,7 +513,6 @@ contract Platform is Owned, ReentrancyGuard {
         } else {
             currentEpoch = _updateBountyPeriod(bountyId, proofProxyVote);
         }
-        //uint256 currentEpoch = _updateBountyPeriod(bountyId, proofUserVote);
         uint256 snapshotBlock = gaugeController.last_eth_block_number();
 
         if (currentEpoch != gaugeController.activePeriod()) return 0;
@@ -1122,9 +1095,6 @@ contract Platform is Owned, ReentrancyGuard {
         uint256 lastVote;
         IGaugeVotingOracle.Point memory gaugeBias;
         IGaugeVotingOracle.VotedSlope memory userSlope;
-
-        // use gauge hash to extract proof
-        //bytes32 gaugeHash = keccak256(abi.encodePacked(bounty.gauge, bounty.chainId));
 
         (gaugeBias, userSlope, lastVote,) = gaugeController.extractProofState(
             proofData.user, bounty.gauge, bounty.chainId, proofData.headerRlp, proofData.userProofRlp

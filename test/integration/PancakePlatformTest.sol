@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.20;
+pragma solidity ^0.8.19;
 
 import {Platform} from "src/pancakeswap/Platform.sol";
 import {LibString} from "solady/utils/LibString.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.20;
+pragma solidity ^0.8.19;
 
 import {LibString} from "solady/utils/LibString.sol";
 import {IAxelarGateway} from "src/interfaces/IAxelarGateway.sol";
