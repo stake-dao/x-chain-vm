@@ -12,7 +12,7 @@ abstract contract DeployPancakeXChain is Script {
     address internal constant DEPLOYER = 0x000755Fbe4A24d7478bfcFC1E561AfCE82d1ff62;
     address internal constant GAUGE_VOTING = 0xf81953dC234cdEf1D6D0d3ef61b232C6bCbF9aeF;
     address internal immutable axelarGateway;
-    address internal constant BNB_STATE_SENDER = 0x4C1CF444Bbbfd3eD6608659B61A1107aF01181e5; 
+    address internal constant BNB_STATE_SENDER = 0x4C1CF444Bbbfd3eD6608659B61A1107aF01181e5;
 
     PancakeOracle internal oracle;
     AxelarExecutable internal axelarExecutable;
