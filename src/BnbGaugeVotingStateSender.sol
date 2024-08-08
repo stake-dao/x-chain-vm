@@ -125,7 +125,7 @@ contract BnbGaugeVotingStateSender {
             userSlope.end
         );
         payload = abi.encodeWithSignature(
-            "claim(uint256, address, (address, uint256, uint256, uint256, uint256, uint256, uint256), (address, uint256, uint256, uint256, uint256, uint256, uint256)[])",
+            "claim(uint256,address,(address,uint256,uint256,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256,uint256,uint256)[])",
             _bountyId,
             _user,
             userClaimData,
@@ -165,7 +165,7 @@ contract BnbGaugeVotingStateSender {
         );
 
         payload = abi.encodeWithSignature(
-            "claimWithProxy(uint256, address, (address, uint256, uint256, uint256, uint256, uint256, uint256), (address, uint256, uint256, uint256, uint256, uint256, uint256), (address, uint256, uint256, uint256, uint256, uint256, uint256)[])",
+            "claimWithProxy(uint256,address,(address,uint256,uint256,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256,uint256,uint256)[])",
             _bountyId,
             _user,
             userClaimData,

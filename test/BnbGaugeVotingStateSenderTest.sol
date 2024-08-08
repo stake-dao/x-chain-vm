@@ -2,13 +2,17 @@
 pragma solidity 0.8.20;
 
 import "test/utils/Utils.sol";
-import {IAxelarGateway} from "../src/interfaces/IAxelarGateway.sol";
-import {IAxelarGasReceiverProxy} from "../src/interfaces/IAxelarGasReceiverProxy.sol";
+import {IAxelarGateway} from "src/interfaces/IAxelarGateway.sol";
+import {IAxelarGasReceiverProxy} from "src/interfaces/IAxelarGasReceiverProxy.sol";
 import {BnbGaugeVotingStateSender} from "src/BnbGaugeVotingStateSender.sol";
 import {IPlatformNoProof} from "src/interfaces/IPlatformNoProof.sol";
+import {AxelarExecutableClaimer} from "src/AxelarExecutableClaimer.sol";
+import {MockPancakePlatformNoProof} from "test/mocks/MockPancakePlatformNoProof.sol";
 
 contract BnbGaugeVotingStateSenderTest is Utils {
     BnbGaugeVotingStateSender internal sender;
+    AxelarExecutableClaimer internal claimer;
+    MockPancakePlatformNoProof internal platform;
 
     struct ClaimData {
         address user;
@@ -28,15 +32,18 @@ contract BnbGaugeVotingStateSenderTest is Utils {
     uint256 internal constant GAUGE_CHAIN_ID = 56;
     uint256 internal constant DST_CHAIN_ID = 42161;
 
-    address internal claimer = address(0xAAAA);
-
     function setUp() public {
         uint256 forkId = vm.createFork("bsc", 41162000);
         vm.selectFork(forkId);
 
+        // deploy all contracts in the same chain
         sender = new BnbGaugeVotingStateSender(address(this), 0.003 ether, 0.001 ether);
 
-        sender.setVm(claimer, "arbitrum", DST_CHAIN_ID);
+        platform = new MockPancakePlatformNoProof();
+
+        claimer = new AxelarExecutableClaimer(sender.AXELAR_GATEWAY(), address(sender), "binance", address(platform));
+
+        sender.setVm(address(claimer), "arbitrum", DST_CHAIN_ID);
     }
 
     function testSendClaimStateWithoutProxy() external {
@@ -62,6 +69,11 @@ contract BnbGaugeVotingStateSenderTest is Utils {
         assertEq(proxyClaimData.userVoteSlope, 0);
         assertEq(proxyClaimData.userVotePower, 0);
         assertEq(proxyClaimData.userVoteEnd, 0);
+
+        //claimer.execute("", sourceChain, sourceAddress, payload);
+        ///vm.prank(address(claimer));
+        (bool success,) = address(platform).call(payload);
+        assertTrue(success);
     }
 
     function testSendClaimStateWithProxy() external {
@@ -90,6 +102,9 @@ contract BnbGaugeVotingStateSenderTest is Utils {
         assertGt(proxyClaimData.userVoteEnd, getCurrentPeriod());
 
         assertEq(userClaimData.lastVote, proxyClaimData.lastVote);
+
+        (bool success,) = address(platform).call(payload);
+        assertTrue(success);
     }
 
     function _encodePayload(bytes calldata _payload)
@@ -101,7 +116,7 @@ contract BnbGaugeVotingStateSenderTest is Utils {
             IPlatformNoProof.ClaimData[] memory blacklistClaimData
         )
     {
-        // without proxy, without blacklist
+        // without proxy
         if (_payload.length == 356) {
             (,, userClaimData, blacklistClaimData) =
                 abi.decode(_payload[4:], (uint256, address, IPlatformNoProof.ClaimData, IPlatformNoProof.ClaimData[]));
