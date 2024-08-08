@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.20;
+pragma solidity ^0.8.19;
 
 import "test/utils/Utils.sol";
 import {IAxelarGateway} from "src/interfaces/IAxelarGateway.sol";
@@ -57,15 +57,19 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
 
-        (IPlatformNoProof.ClaimData memory userClaimData, IPlatformNoProof.ClaimData memory proxyClaimData,) =
-            this._encodePayload(payload);
+        (
+            uint256 gaugeBias,
+            IPlatformNoProof.ClaimData memory userClaimData,
+            IPlatformNoProof.ClaimData memory proxyClaimData,
+        ) = this._encodePayload(payload);
+
+        // check gauge data
+        assertGt(gaugeBias, 0);
 
         // check user data
         assertEq(userClaimData.user, USER);
         assertGt(userClaimData.lastVote, 0);
         assertGt(userClaimData.lastVote, getCurrentPeriod());
-        assertGt(userClaimData.gaugeBias, 0);
-        assertGt(userClaimData.gaugeSlope, 0);
         assertGt(userClaimData.userVoteSlope, 0);
         assertEq(userClaimData.userVotePower, 1000);
         assertGt(userClaimData.userVoteEnd, getCurrentPeriod());
@@ -77,8 +81,6 @@ contract BnbGaugeVotingStateSenderTest is Utils {
         assertEq(proxyClaimData.userVotePower, 0);
         assertEq(proxyClaimData.userVoteEnd, 0);
 
-        //claimer.execute("", sourceChain, sourceAddress, payload);
-        ///vm.prank(address(claimer));
         (bool success,) = address(platform).call(payload);
         assertTrue(success);
     }
@@ -94,15 +96,19 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
 
-        (IPlatformNoProof.ClaimData memory userClaimData, IPlatformNoProof.ClaimData memory proxyClaimData,) =
-            this._encodePayload(payload);
+        (
+            uint256 gaugeBias,
+            IPlatformNoProof.ClaimData memory userClaimData,
+            IPlatformNoProof.ClaimData memory proxyClaimData,
+        ) = this._encodePayload(payload);
+
+        // check gauge bias
+        assertGt(gaugeBias, 0);
 
         // check user data
         assertEq(userClaimData.user, USER_2);
         assertGt(userClaimData.lastVote, 0);
         assertGt(userClaimData.lastVote, getCurrentPeriod());
-        assertGt(userClaimData.gaugeBias, 0);
-        assertGt(userClaimData.gaugeSlope, 0);
         assertGt(userClaimData.userVoteSlope, 0);
         assertEq(userClaimData.userVotePower, 10000);
         assertGt(userClaimData.userVoteEnd, getCurrentPeriod());
@@ -125,6 +131,7 @@ contract BnbGaugeVotingStateSenderTest is Utils {
         public
         pure
         returns (
+            uint256 gaugeBias,
             IPlatformNoProof.ClaimData memory userClaimData,
             IPlatformNoProof.ClaimData memory proxyClaimData,
             IPlatformNoProof.ClaimData[] memory blacklistClaimData
@@ -132,13 +139,23 @@ contract BnbGaugeVotingStateSenderTest is Utils {
     {
         // without proxy
         if (_payload.length == 356) {
-            (,, userClaimData, blacklistClaimData) =
-                abi.decode(_payload[4:], (uint256, address, IPlatformNoProof.ClaimData, IPlatformNoProof.ClaimData[]));
+            (,,, gaugeBias, userClaimData, blacklistClaimData) = abi.decode(
+                _payload[4:],
+                (uint256, address, uint256, uint256, IPlatformNoProof.ClaimData, IPlatformNoProof.ClaimData[])
+            );
         } else {
             // with proxy
-            (,, userClaimData, proxyClaimData, blacklistClaimData) = abi.decode(
+            (,,, gaugeBias, userClaimData, proxyClaimData, blacklistClaimData) = abi.decode(
                 _payload[4:],
-                (uint256, address, IPlatformNoProof.ClaimData, IPlatformNoProof.ClaimData, IPlatformNoProof.ClaimData[])
+                (
+                    uint256,
+                    address,
+                    uint256,
+                    uint256,
+                    IPlatformNoProof.ClaimData,
+                    IPlatformNoProof.ClaimData,
+                    IPlatformNoProof.ClaimData[]
+                )
             );
         }
     }

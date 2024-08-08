@@ -415,21 +415,25 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     function claim(
         uint256 _bountyId,
         address _recipient,
+        uint256 _dataTs,
+        uint256 _gaugeBias,
         ClaimData memory _claimData,
         ClaimData[] memory _blacklistData
     ) external {
         ClaimData memory emptyClaimData;
-        _claim(_bountyId, _claimData, emptyClaimData, _recipient, _blacklistData);
+        _claim(_bountyId, _recipient, _dataTs, _gaugeBias, _claimData, emptyClaimData, _blacklistData);
     }
 
     function claimWithProxy(
         uint256 _bountyId,
         address _recipient,
+        uint256 _dataTs,
+        uint256 _gaugeBias,
         ClaimData memory _userClaimData,
         ClaimData memory _proxyClaimData,
         ClaimData[] memory _blacklistData
     ) external {
-        _claim(_bountyId, _userClaimData, _proxyClaimData, _recipient, _blacklistData);
+        _claim(_bountyId, _recipient, _dataTs, _gaugeBias, _userClaimData, _proxyClaimData, _blacklistData);
     }
 
     /// @notice Claim rewards for a given bounty.
@@ -532,17 +536,19 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     /// @return amount of rewards claimed.
     function _claim(
         uint256 _bountyId,
+        address _recipient,
+        uint256 _dataTs,
+        uint256 _gaugeBias,
         ClaimData memory _userClaimData,
         ClaimData memory _proxyClaimData,
-        address _recipient,
         ClaimData[] memory _blacklistData
     ) internal notKilled onlyClaimer returns (uint256 amount) {
         // Update if needed the current period.
         uint256 currentEpoch;
         if (_userClaimData.user != address(0)) {
-            currentEpoch = _updateBountyPeriod(_bountyId, _userClaimData, _blacklistData);
+            currentEpoch = _updateBountyPeriod(_bountyId, _gaugeBias, _userClaimData, _blacklistData);
         } else {
-            currentEpoch = _updateBountyPeriod(_bountyId, _proxyClaimData, _blacklistData);
+            currentEpoch = _updateBountyPeriod(_bountyId, _gaugeBias, _proxyClaimData, _blacklistData);
         }
 
         Bounty storage bounty = bounties[_bountyId];
@@ -654,10 +660,12 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     /// @notice Update the current period for a given bounty.
     /// @param _bountyId Bounty ID.
     /// @return current/updated period.
-    function _updateBountyPeriod(uint256 _bountyId, ClaimData memory _claimData, ClaimData[] memory _blacklist)
-        internal
-        returns (uint256)
-    {
+    function _updateBountyPeriod(
+        uint256 _bountyId,
+        uint256 _gaugeBias,
+        ClaimData memory _claimData,
+        ClaimData[] memory _blacklist
+    ) internal returns (uint256) {
         Period storage _activePeriod = activePeriod[_bountyId];
 
         uint256 currentEpoch = getCurrentEpoch();
@@ -667,7 +675,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
             _checkForUpgrade(_bountyId);
             // Initialize reward per vote.
             // Only for the first period, and if not already initialized.
-            _updateRewardPerToken(_bountyId, currentEpoch, _claimData, _blacklist);
+            _updateRewardPerToken(_bountyId, currentEpoch, _gaugeBias, _claimData, _blacklist);
         }
 
         // Increase Period after the active period (period on 2 weeks rounded down to the first, so week after)
@@ -676,7 +684,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
             _checkForUpgrade(_bountyId);
 
             // Roll to next period.
-            _rollOverToNextPeriod(_bountyId, currentEpoch, _claimData, _blacklist);
+            _rollOverToNextPeriod(_bountyId, currentEpoch, _gaugeBias, _claimData, _blacklist);
 
             return currentEpoch;
         }
@@ -720,6 +728,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     function _rollOverToNextPeriod(
         uint256 _bountyId,
         uint256 _currentEpoch,
+        uint256 _gaugeBias,
         ClaimData memory _claimData,
         ClaimData[] memory _blacklistData
     ) internal {
@@ -737,7 +746,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
         }
 
         // Get adjusted slope without blacklisted addresses.
-        uint256 gaugeBias = _getAdjustedBias(bounty.blacklist, _currentEpoch, _claimData, _blacklistData);
+        uint256 gaugeBias = _getAdjustedBias(bounty.blacklist, _currentEpoch, _gaugeBias, _blacklistData);
 
         rewardPerVote[_bountyId] = rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
         activePeriod[_bountyId] = Period(index, _currentEpoch, rewardPerPeriod);
@@ -750,12 +759,13 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     function _updateRewardPerToken(
         uint256 _bountyId,
         uint256 _currentEpoch,
+        uint256 _gaugeBias,
         ClaimData memory _claimData,
         ClaimData[] memory _blacklistData
     ) internal {
         Bounty storage bounty = bounties[_bountyId];
 
-        uint256 gaugeBias = _getAdjustedBias(bounty.blacklist, _currentEpoch, _claimData, _blacklistData);
+        uint256 gaugeBias = _getAdjustedBias(bounty.blacklist, _currentEpoch, _gaugeBias, _blacklistData);
 
         if (gaugeBias != 0) {
             rewardPerVote[_bountyId] = activePeriod[_bountyId].rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
@@ -773,6 +783,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     /// Mainly used for UI.
     function claimable(
         uint256 bountyId,
+        uint256 _gaugeBias,
         ClaimData memory userClaimData,
         ClaimData memory proxyClaimData,
         ClaimData[] memory blacklistClaimData
@@ -781,11 +792,11 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
         address proxy = proxyClaimData.user;
 
         if (user != address(0)) {
-            amount += _activeClaimable(bountyId, userClaimData, blacklistClaimData);
+            amount += _activeClaimable(bountyId, _gaugeBias, userClaimData, blacklistClaimData);
         }
 
         if (proxy != address(0)) {
-            amount += _activeClaimable(bountyId, proxyClaimData, blacklistClaimData);
+            amount += _activeClaimable(bountyId, _gaugeBias, proxyClaimData, blacklistClaimData);
         }
     }
 
@@ -801,7 +812,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     function _getAdjustedBias(
         address[] memory _addressesBlacklisted,
         uint256 _period,
-        ClaimData memory _claimData,
+        uint256 _gaugeBias,
         ClaimData[] memory _blacklistData
     ) internal pure returns (uint256 gaugeBias) {
         if (_addressesBlacklisted.length != _blacklistData.length) revert WRONG_INPUT();
@@ -811,7 +822,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
         // Cache the length of the array.
         uint256 length = _addressesBlacklisted.length;
         // Get the gauge slope.
-        gaugeBias = _claimData.gaugeBias;
+        gaugeBias = _gaugeBias;
 
         for (uint256 i = 0; i < length;) {
             // Get the user slope.
@@ -1046,11 +1057,12 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     }
 
     /// @notice Get the claimable amount for a user and a bounty.
-    function _activeClaimable(uint256 bountyId, ClaimData memory _claimData, ClaimData[] memory _blacklistClaimData)
-        internal
-        view
-        returns (uint256 amount)
-    {
+    function _activeClaimable(
+        uint256 bountyId,
+        uint256 _gaugeBias,
+        ClaimData memory _claimData,
+        ClaimData[] memory _blacklistClaimData
+    ) internal view returns (uint256 amount) {
         if (isBlacklisted[bountyId][_claimData.user]) return 0;
 
         Bounty memory bounty = bounties[bountyId];
@@ -1091,7 +1103,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
             }
 
             // Get Adjusted Slope without blacklisted addresses weight.
-            uint256 gaugeBias = _getAdjustedBias(bounty.blacklist, currentEpoch, _claimData, _blacklistClaimData);
+            uint256 gaugeBias = _getAdjustedBias(bounty.blacklist, currentEpoch, _gaugeBias, _blacklistClaimData);
 
             _rewardPerVote = _rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
         }
