@@ -67,7 +67,7 @@ contract BnbGaugeVotingStateSender {
         uint256 _gaugeChainId,
         uint256 _dstChainId,
         address[] calldata _blacklist
-    ) external payable returns (bytes memory payload) {
+    ) external payable {
         bytes32 gaugeHash = keccak256(abi.encodePacked(_gauge, _gaugeChainId));
 
         // check if the user own a proxy
@@ -78,12 +78,11 @@ contract BnbGaugeVotingStateSender {
             proxy = address(0);
         }
 
-        //bytes memory payload;
-
         IGaugeVoting.Point memory points = GAUGE_VOTING.gaugePointsWeight(gaugeHash, getCurrentPeriod());
 
         IPlatformNoProof.ClaimData[] memory blacklistData = _fillBlacklistData(_blacklist, gaugeHash, points);
 
+        bytes memory payload;
         // if the user locked CAKE and he has not a proxy
         if (VE_CAKE.balanceOf(_user) != 0 && proxy == address(0)) {
             payload = _createClaimPayload(_user, _bountyId, gaugeHash, points, blacklistData);

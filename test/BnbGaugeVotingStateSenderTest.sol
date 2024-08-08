@@ -48,7 +48,14 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
     function testSendClaimStateWithoutProxy() external {
         address[] memory blacklist;
-        bytes memory payload = sender.claimOnDstChain(0, USER, GAUGE, GAUGE_CHAIN_ID, DST_CHAIN_ID, blacklist);
+
+        vm.recordLogs();
+
+        sender.claimOnDstChain(0, USER, GAUGE, GAUGE_CHAIN_ID, DST_CHAIN_ID, blacklist);
+
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
 
         (IPlatformNoProof.ClaimData memory userClaimData, IPlatformNoProof.ClaimData memory proxyClaimData,) =
             this._encodePayload(payload);
@@ -78,7 +85,14 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
     function testSendClaimStateWithProxy() external {
         address[] memory blacklist;
-        bytes memory payload = sender.claimOnDstChain(0, USER_2, GAUGE_2, GAUGE_CHAIN_ID, DST_CHAIN_ID, blacklist);
+
+        vm.recordLogs();
+
+        sender.claimOnDstChain(0, USER_2, GAUGE_2, GAUGE_CHAIN_ID, DST_CHAIN_ID, blacklist);
+
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
 
         (IPlatformNoProof.ClaimData memory userClaimData, IPlatformNoProof.ClaimData memory proxyClaimData,) =
             this._encodePayload(payload);
