@@ -4,8 +4,6 @@ pragma solidity 0.8.20;
 import {IPlatformNoProof} from "src/interfaces/IPlatformNoProof.sol";
 
 contract MockPancakePlatformNoProof is IPlatformNoProof {
-    function test() external {}
-
     function claim(
         uint256 _bountyId,
         address _recipient,
