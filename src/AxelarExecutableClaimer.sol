@@ -5,7 +5,7 @@ import {Owned} from "solmate/auth/Owned.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {IAxelarExecutable, IAxelarGateway} from "src/interfaces/IAxelarExecutable.sol";
 
-contract AxelarExecutable is IAxelarExecutable, Owned {
+contract AxelarExecutableClaimer is IAxelarExecutable, Owned {
     using LibString for string;
     using LibString for address;
 
@@ -13,25 +13,23 @@ contract AxelarExecutable is IAxelarExecutable, Owned {
     error WRONG_SOURCE_CHAIN();
     error WRONG_SOURCE_ADDRESS();
 
-    /// @notice Gauge Controller Oracles.
-    address[] public oracles;
-
     /// @notice Ethereum State Sender
     address public ess;
+    address public platform;
     string public strEss;
     string public srcChain;
 
-    event OracleSet(address[] oracles);
+    event PlatformSet(address platform);
     event EssSet(address ess);
 
-    constructor(address _axelarGateway, address _sourceAddress, address[] memory _oracles, string memory _srcChain)
+    constructor(address _axelarGateway, address _sourceAddress, string memory _srcChain, address _platform)
         IAxelarExecutable(_axelarGateway)
         Owned(msg.sender)
     {
-        oracles = _oracles;
         ess = _sourceAddress;
         srcChain = _srcChain;
         strEss = _sourceAddress.toHexStringChecksumed();
+        platform = _platform;
     }
 
     /// @notice Execute the payload
@@ -46,17 +44,15 @@ contract AxelarExecutable is IAxelarExecutable, Owned {
         if (!sourceChain.eq(srcChain)) revert WRONG_SOURCE_CHAIN();
         if (!sourceAddress.eq(strEss)) revert WRONG_SOURCE_ADDRESS();
 
-        for (uint256 i = 0; i < oracles.length; i++) {
-            (bool success,) = oracles[i].call(payload);
-            if (!success) revert CALL_FAILED();
-        }
+        (bool success,) = platform.call(payload);
+        if (!success) revert CALL_FAILED();
     }
 
-    /// @notice Set new oracles
-    /// @param _oracles oracle addresses
-    function setOracles(address[] calldata _oracles) external onlyOwner {
-        oracles = _oracles;
-        emit OracleSet(oracles);
+    /// @notice Set new vm platform
+    /// @param _platform platform address
+    function setPlatform(address _platform) external onlyOwner {
+        platform = _platform;
+        emit PlatformSet(platform);
     }
 
     /// @notice Set a new ethereum state sender

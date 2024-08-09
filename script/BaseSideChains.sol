@@ -39,7 +39,7 @@ abstract contract BaseSideChains is Script, Utils {
         address[] memory oracles = new address[](1);
         oracles[0] = address(oracle);
 
-        axelarExecutable = new AxelarExecutable(_AXELAR_GATEWAY, ETH_STATE_SENDER, oracles);
+        axelarExecutable = new AxelarExecutable(_AXELAR_GATEWAY, ETH_STATE_SENDER, oracles, "Ethereum");
         oracle.setAxelarExecutable(address(axelarExecutable));
 
         platform = new Platform(address(oracle), DEPLOYER, DEPLOYER);

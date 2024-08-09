@@ -25,6 +25,8 @@ interface GaugeController {
 
     function checkpoint_gauge(address) external;
 
+    function checkpointGauge(address _gauge, uint256 _chainId) external;
+
     //solhint-disable-next-line
     function gauge_types(address addr) external view returns (int128);
 

@@ -22,6 +22,19 @@ abstract contract Utils is Test {
         return abi.decode(vm.ffi(inputs), (bytes32, bytes, bytes));
     }
 
+    function getRLPEncodedProofsBsc(string memory _rpcUrl, uint256 _blockNumber, string memory _account)
+        internal
+        returns (bytes32 _block_hash, bytes memory _block_header_rlp, bytes memory _proof_rlp)
+    {
+        string[] memory inputs = new string[](5);
+        inputs[0] = "python3";
+        inputs[1] = "test/python/get_proof_bsc.py";
+        inputs[2] = _rpcUrl;
+        inputs[3] = vm.toString(_blockNumber);
+        inputs[4] = _account;
+        return abi.decode(vm.ffi(inputs), (bytes32, bytes, bytes));
+    }
+
     function getRLPEncodedProofsForGaugeController(
         string memory rpcUrl,
         address _gaugeController,

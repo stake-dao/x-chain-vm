@@ -18,7 +18,7 @@ jobs:
           python-version: '3.7.13'
 
       - name: Install eth_abi
-        run: pip install eth-abi==2.2.0 rlp==2.0.1 web3==5.30.0
+        run: pip install eth-abi==2.2.0 rlp==2.0.1 web3==5.30.0 python-dotenv
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
