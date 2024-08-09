@@ -313,6 +313,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     error AUTH_CLAIMER_ONLY();
     error AUTH_MANAGER_ONLY();
     error INVALID_NUMBER_OF_EPOCHS();
+    error WRONG_GAUGE();
 
     ////////////////////////////////////////////////////////////////
     /// --- CONSTRUCTOR
@@ -415,25 +416,27 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     function claim(
         uint256 _bountyId,
         address _recipient,
+        address _gauge,
         uint256 _dataTs,
         uint256 _gaugeBias,
         ClaimData memory _claimData,
         ClaimData[] memory _blacklistData
     ) external {
         ClaimData memory emptyClaimData;
-        _claim(_bountyId, _recipient, _dataTs, _gaugeBias, _claimData, emptyClaimData, _blacklistData);
+        _claim(_bountyId, _recipient, _gauge, _dataTs, _gaugeBias, _claimData, emptyClaimData, _blacklistData);
     }
 
     function claimWithProxy(
         uint256 _bountyId,
         address _recipient,
+        address _gauge,
         uint256 _dataTs,
         uint256 _gaugeBias,
         ClaimData memory _userClaimData,
         ClaimData memory _proxyClaimData,
         ClaimData[] memory _blacklistData
     ) external {
-        _claim(_bountyId, _recipient, _dataTs, _gaugeBias, _userClaimData, _proxyClaimData, _blacklistData);
+        _claim(_bountyId, _recipient, _gauge, _dataTs, _gaugeBias, _userClaimData, _proxyClaimData, _blacklistData);
     }
 
     /// @notice Claim rewards for a given bounty.
@@ -537,12 +540,17 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     function _claim(
         uint256 _bountyId,
         address _recipient,
+        address _gauge,
         uint256 _dataTs,
         uint256 _gaugeBias,
         ClaimData memory _userClaimData,
         ClaimData memory _proxyClaimData,
         ClaimData[] memory _blacklistData
     ) internal notKilled onlyClaimer returns (uint256 amount) {
+        Bounty storage bounty = bounties[_bountyId];
+
+        if (bounty.gauge != _gauge) revert WRONG_GAUGE();
+
         // Update if needed the current period.
         uint256 currentEpoch;
         if (_userClaimData.user != address(0)) {
@@ -550,8 +558,6 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
         } else {
             currentEpoch = _updateBountyPeriod(_bountyId, _gaugeBias, _proxyClaimData, _blacklistData);
         }
-
-        Bounty storage bounty = bounties[_bountyId];
 
         // Checking votes from user
         if (_userClaimData.user != address(0)) {
@@ -808,7 +814,6 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     /// Remove the weight of blacklisted addresses.
     /// @param _addressesBlacklisted Array of blacklisted addresses.
     /// @param _period Timestamp to check vote weight.
-    /// @param _claimData Claim data
     function _getAdjustedBias(
         address[] memory _addressesBlacklisted,
         uint256 _period,

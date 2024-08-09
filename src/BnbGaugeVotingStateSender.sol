@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.19;
 
-//import {StateSender} from "src/StateSender.sol";
 import {IGaugeVoting} from "src/interfaces/IGaugeVoting.sol";
 import {IVotingEscrow} from "src/interfaces/IVotingEscrow.sol";
 import {IAxelarGateway} from "src/interfaces/IAxelarGateway.sol";
@@ -68,8 +67,6 @@ contract BnbGaugeVotingStateSender {
         uint256 _dstChainId,
         address[] calldata _blacklist
     ) external payable {
-        bytes32 gaugeHash = keccak256(abi.encodePacked(_gauge, _gaugeChainId));
-
         // check if the user own a proxy
         (,, address proxy,, uint256 lockEndTime,,,) = VE_CAKE.getUserInfo(_user);
 
@@ -78,22 +75,7 @@ contract BnbGaugeVotingStateSender {
             proxy = address(0);
         }
 
-        //IGaugeVoting.Point memory points = GAUGE_VOTING.gaugePointsWeight(gaugeHash, getCurrentPeriod());
-        uint256 gaugeBias = GAUGE_VOTING.gaugePointsWeight(gaugeHash, getCurrentPeriod()).bias;
-
-        IPlatformNoProof.ClaimData[] memory blacklistData = _fillBlacklistData(_blacklist, gaugeHash);
-
-        bytes memory payload;
-        // if the user locked CAKE and he has not a proxy
-        if (VE_CAKE.balanceOf(_user) != 0 && proxy == address(0)) {
-            payload = _createClaimPayload(_user, _bountyId, gaugeHash, gaugeBias, blacklistData);
-        } else if (VE_CAKE.balanceOf(_user) == 0 && proxy != address(0)) {
-            // if the user did not lock any CAKE but he has a proxy
-            payload = _createClaimPayload(proxy, _bountyId, gaugeHash, gaugeBias, blacklistData);
-        } else if (VE_CAKE.balanceOf(_user) != 0 && proxy != address(0)) {
-            // if the user locked CAKE and has a proxy
-            payload = _createClaimWithProxyPayload(_user, proxy, _bountyId, gaugeHash, gaugeBias, blacklistData);
-        }
+        bytes memory payload = _createPayload(_bountyId, _user, proxy, _gauge, _gaugeChainId, _blacklist);
 
         if (payload.length > 0) {
             string memory destinationContractHex = vms[_dstChainId].claimer.toHexStringChecksumed();
@@ -106,8 +88,36 @@ contract BnbGaugeVotingStateSender {
         }
     }
 
+    function _createPayload(
+        uint256 _bountyId,
+        address _user,
+        address _proxy,
+        address _gauge,
+        uint256 _gaugeChainId,
+        address[] memory _blacklist
+    ) internal view returns (bytes memory payload) {
+        bytes32 gaugeHash = keccak256(abi.encodePacked(_gauge, _gaugeChainId));
+
+        uint256 gaugeBias = GAUGE_VOTING.gaugePointsWeight(gaugeHash, getCurrentPeriod()).bias;
+
+        IPlatformNoProof.ClaimData[] memory blacklistData = _fillBlacklistData(_blacklist, gaugeHash);
+
+        // if the user locked CAKE and he has not a proxy
+        if (VE_CAKE.balanceOf(_user) != 0 && _proxy == address(0)) {
+            payload = _createClaimPayload(_user, _gauge, _bountyId, gaugeHash, gaugeBias, blacklistData);
+        } else if (VE_CAKE.balanceOf(_user) == 0 && _proxy != address(0)) {
+            // if the user did not lock any CAKE but he has a proxy
+            payload = _createClaimPayload(_proxy, _gauge, _bountyId, gaugeHash, gaugeBias, blacklistData);
+        } else if (VE_CAKE.balanceOf(_user) != 0 && _proxy != address(0)) {
+            // if the user locked CAKE and has a proxy
+            payload =
+                _createClaimWithProxyPayload(_user, _proxy, _gauge, _bountyId, gaugeHash, gaugeBias, blacklistData);
+        }
+    }
+
     function _createClaimPayload(
         address _user,
+        address _gauge,
         uint256 _bountyId,
         bytes32 _gaugeHash,
         uint256 _gaugeBias,
@@ -119,9 +129,10 @@ contract BnbGaugeVotingStateSender {
             _user, GAUGE_VOTING.lastUserVote(_user, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
         );
         payload = abi.encodeWithSignature(
-            "claim(uint256,address,uint256,uint256,(address,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256)[])",
+            "claim(uint256,address,address,uint256,uint256,(address,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256)[])",
             _bountyId,
             _user,
+            _gauge,
             block.timestamp,
             _gaugeBias,
             userClaimData,
@@ -132,26 +143,29 @@ contract BnbGaugeVotingStateSender {
     function _createClaimWithProxyPayload(
         address _user,
         address _proxy,
+        address _gauge,
         uint256 _bountyId,
         bytes32 _gaugeHash,
         uint256 _gaugeBias,
         IPlatformNoProof.ClaimData[] memory _blacklistClaimData
     ) internal view returns (bytes memory payload) {
         IGaugeVoting.VotedSlope memory userSlope = GAUGE_VOTING.voteUserSlopes(_user, _gaugeHash);
-        IGaugeVoting.VotedSlope memory proxySlope = GAUGE_VOTING.voteUserSlopes(_proxy, _gaugeHash);
 
         IPlatformNoProof.ClaimData memory userClaimData = IPlatformNoProof.ClaimData(
             _user, GAUGE_VOTING.lastUserVote(_user, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
         );
 
+        userSlope = GAUGE_VOTING.voteUserSlopes(_proxy, _gaugeHash);
+
         IPlatformNoProof.ClaimData memory proxyClaimData = IPlatformNoProof.ClaimData(
-            _proxy, GAUGE_VOTING.lastUserVote(_proxy, _gaugeHash), proxySlope.slope, proxySlope.power, proxySlope.end
+            _proxy, GAUGE_VOTING.lastUserVote(_proxy, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
         );
 
         payload = abi.encodeWithSignature(
-            "claimWithProxy(uint256,address,uint256,uint256,(address,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256)[])",
+            "claimWithProxy(uint256,address,address,uint256,uint256,(address,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256)[])",
             _bountyId,
             _user,
+            _gauge,
             block.timestamp,
             _gaugeBias,
             userClaimData,

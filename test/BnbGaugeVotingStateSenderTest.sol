@@ -138,17 +138,18 @@ contract BnbGaugeVotingStateSenderTest is Utils {
         )
     {
         // without proxy
-        if (_payload.length == 356) {
-            (,,, gaugeBias, userClaimData, blacklistClaimData) = abi.decode(
+        if (_payload.length == 388) {
+            (,,,, gaugeBias, userClaimData, blacklistClaimData) = abi.decode(
                 _payload[4:],
-                (uint256, address, uint256, uint256, IPlatformNoProof.ClaimData, IPlatformNoProof.ClaimData[])
+                (uint256, address, address, uint256, uint256, IPlatformNoProof.ClaimData, IPlatformNoProof.ClaimData[])
             );
         } else {
             // with proxy
-            (,,, gaugeBias, userClaimData, proxyClaimData, blacklistClaimData) = abi.decode(
+            (,,,, gaugeBias, userClaimData, proxyClaimData, blacklistClaimData) = abi.decode(
                 _payload[4:],
                 (
                     uint256,
+                    address,
                     address,
                     uint256,
                     uint256,
