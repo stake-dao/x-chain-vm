@@ -57,29 +57,19 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
 
-        (
-            uint256 gaugeBias,
-            IPlatformNoProof.ClaimData memory userClaimData,
-            IPlatformNoProof.ClaimData memory proxyClaimData,
-        ) = this._encodePayload(payload);
+        (uint256 gaugeBias, IPlatformNoProof.ClaimData[] memory claimData) = this._encodePayload(payload);
 
         // check gauge data
         assertGt(gaugeBias, 0);
+        assertEq(ClaimData.length, 1);
 
         // check user data
-        assertEq(userClaimData.user, USER);
-        assertGt(userClaimData.lastVote, 0);
-        assertGt(userClaimData.lastVote, getCurrentPeriod());
-        assertGt(userClaimData.userVoteSlope, 0);
-        assertEq(userClaimData.userVotePower, 1000);
-        assertGt(userClaimData.userVoteEnd, getCurrentPeriod());
-
-        // check proxy data (expired)
-        assertEq(proxyClaimData.user, address(0));
-        assertEq(proxyClaimData.lastVote, 0);
-        assertEq(proxyClaimData.userVoteSlope, 0);
-        assertEq(proxyClaimData.userVotePower, 0);
-        assertEq(proxyClaimData.userVoteEnd, 0);
+        assertEq(claimData[0].user, USER);
+        assertGt(claimData[0].lastVote, 0);
+        assertGt(claimData[0].lastVote, getCurrentPeriod());
+        assertGt(claimData[0].userVoteSlope, 0);
+        assertEq(claimData[0].userVotePower, 1000);
+        assertGt(claimData[0].userVoteEnd, getCurrentPeriod());
 
         (bool success,) = address(platform).call(payload);
         assertTrue(success);
@@ -96,32 +86,29 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
 
-        (
-            uint256 gaugeBias,
-            IPlatformNoProof.ClaimData memory userClaimData,
-            IPlatformNoProof.ClaimData memory proxyClaimData,
-        ) = this._encodePayload(payload);
+        (uint256 gaugeBias, IPlatformNoProof.ClaimData[] memory claimData) = this._encodePayload(payload);
 
         // check gauge bias
         assertGt(gaugeBias, 0);
+        assertEq(ClaimData.length, 2);
 
         // check user data
-        assertEq(userClaimData.user, USER_2);
-        assertGt(userClaimData.lastVote, 0);
-        assertGt(userClaimData.lastVote, getCurrentPeriod());
-        assertGt(userClaimData.userVoteSlope, 0);
-        assertEq(userClaimData.userVotePower, 10000);
-        assertGt(userClaimData.userVoteEnd, getCurrentPeriod());
+        assertEq(claimData[0].user, USER_2);
+        assertGt(claimData[0].lastVote, 0);
+        assertGt(claimData[0].lastVote, getCurrentPeriod());
+        assertGt(claimData[0].userVoteSlope, 0);
+        assertEq(claimData[0].userVotePower, 10000);
+        assertGt(claimData[0].userVoteEnd, getCurrentPeriod());
 
         // check proxy data
-        assertEq(proxyClaimData.user, USER_2_PROXY);
-        assertGt(proxyClaimData.lastVote, 0);
-        assertGt(proxyClaimData.lastVote, getCurrentPeriod());
-        assertGt(proxyClaimData.userVoteSlope, 0);
-        assertEq(proxyClaimData.userVotePower, 10000);
-        assertGt(proxyClaimData.userVoteEnd, getCurrentPeriod());
+        assertEq(claimData[1].user, USER_2_PROXY);
+        assertGt(claimData[1].lastVote, 0);
+        assertGt(claimData[1].lastVote, getCurrentPeriod());
+        assertGt(claimData[1].userVoteSlope, 0);
+        assertEq(claimData[1].userVotePower, 10000);
+        assertGt(claimData[1].userVoteEnd, getCurrentPeriod());
 
-        assertEq(userClaimData.lastVote, proxyClaimData.lastVote);
+        assertEq(claimData[0].lastVote, claimData[1].lastVote);
 
         (bool success,) = address(platform).call(payload);
         assertTrue(success);
@@ -130,35 +117,10 @@ contract BnbGaugeVotingStateSenderTest is Utils {
     function _encodePayload(bytes calldata _payload)
         public
         pure
-        returns (
-            uint256 gaugeBias,
-            IPlatformNoProof.ClaimData memory userClaimData,
-            IPlatformNoProof.ClaimData memory proxyClaimData,
-            IPlatformNoProof.ClaimData[] memory blacklistClaimData
-        )
+        returns (uint256 gaugeBias, IPlatformNoProof.ClaimData[] memory claimData)
     {
-        // without proxy
-        if (_payload.length == 388) {
-            (,,,, gaugeBias, userClaimData, blacklistClaimData) = abi.decode(
-                _payload[4:],
-                (uint256, address, address, uint256, uint256, IPlatformNoProof.ClaimData, IPlatformNoProof.ClaimData[])
-            );
-        } else {
-            // with proxy
-            (,,,, gaugeBias, userClaimData, proxyClaimData, blacklistClaimData) = abi.decode(
-                _payload[4:],
-                (
-                    uint256,
-                    address,
-                    address,
-                    uint256,
-                    uint256,
-                    IPlatformNoProof.ClaimData,
-                    IPlatformNoProof.ClaimData,
-                    IPlatformNoProof.ClaimData[]
-                )
-            );
-        }
+        (,,,, gaugeBias, claimData,) =
+            abi.decode(_payload[4:], (uint256, address, address, uint256, uint256, IPlatformNoProof.ClaimData[], bool));
     }
 
     function getCurrentPeriod() public view returns (uint256) {

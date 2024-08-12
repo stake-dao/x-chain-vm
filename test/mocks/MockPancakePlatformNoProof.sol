@@ -10,18 +10,7 @@ contract MockPancakePlatformNoProof is IPlatformNoProof {
         address _gauge,
         uint256 _dataTs,
         uint256 _gaugeBias,
-        ClaimData memory _claimData,
-        ClaimData[] memory _blacklistData
-    ) external {}
-
-    function claimWithProxy(
-        uint256 _bountyId,
-        address _recipient,
-        address _gauge,
-        uint256 _dataTs,
-        uint256 _gaugeBias,
-        ClaimData memory _userClaimData,
-        ClaimData memory _proxyClaimData,
-        ClaimData[] memory _blacklistClaimData
+        ClaimData[] memory _claimData,
+        bool bothClaim
     ) external {}
 }

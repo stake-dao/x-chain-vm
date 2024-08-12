@@ -94,24 +94,21 @@ contract BnbGaugeVotingStateSender {
         address _proxy,
         address _gauge,
         uint256 _gaugeChainId,
-        address[] memory _blacklist
+        address[] calldata _blacklist
     ) internal view returns (bytes memory payload) {
         bytes32 gaugeHash = keccak256(abi.encodePacked(_gauge, _gaugeChainId));
 
         uint256 gaugeBias = GAUGE_VOTING.gaugePointsWeight(gaugeHash, getCurrentPeriod()).bias;
 
-        IPlatformNoProof.ClaimData[] memory blacklistData = _fillBlacklistData(_blacklist, gaugeHash);
-
         // if the user locked CAKE and he has not a proxy
         if (VE_CAKE.balanceOf(_user) != 0 && _proxy == address(0)) {
-            payload = _createClaimPayload(_user, _gauge, _bountyId, gaugeHash, gaugeBias, blacklistData);
+            payload = _createClaimPayload(_user, _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
         } else if (VE_CAKE.balanceOf(_user) == 0 && _proxy != address(0)) {
             // if the user did not lock any CAKE but he has a proxy
-            payload = _createClaimPayload(_proxy, _gauge, _bountyId, gaugeHash, gaugeBias, blacklistData);
+            payload = _createClaimPayload(_proxy, _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
         } else if (VE_CAKE.balanceOf(_user) != 0 && _proxy != address(0)) {
             // if the user locked CAKE and has a proxy
-            payload =
-                _createClaimWithProxyPayload(_user, _proxy, _gauge, _bountyId, gaugeHash, gaugeBias, blacklistData);
+            payload = _createClaimPayloadWithProxy(_user, _proxy, _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
         }
     }
 
@@ -121,71 +118,69 @@ contract BnbGaugeVotingStateSender {
         uint256 _bountyId,
         bytes32 _gaugeHash,
         uint256 _gaugeBias,
-        IPlatformNoProof.ClaimData[] memory _blacklistData
+        address[] memory _blacklist
     ) internal view returns (bytes memory payload) {
+        IPlatformNoProof.ClaimData[] memory claimData = new IPlatformNoProof.ClaimData[](1 + _blacklist.length);
         IGaugeVoting.VotedSlope memory userSlope = GAUGE_VOTING.voteUserSlopes(_user, _gaugeHash);
 
-        IPlatformNoProof.ClaimData memory userClaimData = IPlatformNoProof.ClaimData(
+        claimData[0] = IPlatformNoProof.ClaimData(
             _user, GAUGE_VOTING.lastUserVote(_user, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
         );
-        payload = abi.encodeWithSignature(
-            "claim(uint256,address,address,uint256,uint256,(address,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256)[])",
-            _bountyId,
-            _user,
-            _gauge,
-            block.timestamp,
-            _gaugeBias,
-            userClaimData,
-            _blacklistData
+
+        if (_blacklist.length > 0) {
+            claimData = _fillBlacklistData(claimData, _blacklist, _gaugeHash);
+        }
+
+        payload = abi.encodeWithSelector(
+            IPlatformNoProof.claim.selector, _bountyId, _user, _gauge, block.timestamp, _gaugeBias, claimData, false
         );
     }
 
-    function _createClaimWithProxyPayload(
+    function _createClaimPayloadWithProxy(
         address _user,
         address _proxy,
         address _gauge,
         uint256 _bountyId,
         bytes32 _gaugeHash,
         uint256 _gaugeBias,
-        IPlatformNoProof.ClaimData[] memory _blacklistClaimData
+        address[] calldata _blacklist
     ) internal view returns (bytes memory payload) {
-        IGaugeVoting.VotedSlope memory userSlope = GAUGE_VOTING.voteUserSlopes(_user, _gaugeHash);
+        IPlatformNoProof.ClaimData[] memory claimData = new IPlatformNoProof.ClaimData[](2 + _blacklist.length);
+        IGaugeVoting.VotedSlope memory userSlope;
 
-        IPlatformNoProof.ClaimData memory userClaimData = IPlatformNoProof.ClaimData(
+        userSlope = GAUGE_VOTING.voteUserSlopes(_user, _gaugeHash);
+
+        claimData[0] = IPlatformNoProof.ClaimData(
             _user, GAUGE_VOTING.lastUserVote(_user, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
         );
 
         userSlope = GAUGE_VOTING.voteUserSlopes(_proxy, _gaugeHash);
 
-        IPlatformNoProof.ClaimData memory proxyClaimData = IPlatformNoProof.ClaimData(
+        claimData[1] = IPlatformNoProof.ClaimData(
             _proxy, GAUGE_VOTING.lastUserVote(_proxy, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
         );
 
-        payload = abi.encodeWithSignature(
-            "claimWithProxy(uint256,address,address,uint256,uint256,(address,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256),(address,uint256,uint256,uint256,uint256)[])",
-            _bountyId,
-            _user,
-            _gauge,
-            block.timestamp,
-            _gaugeBias,
-            userClaimData,
-            proxyClaimData,
-            _blacklistClaimData
+        if (_blacklist.length > 0) {
+            claimData = _fillBlacklistData(claimData, _blacklist, _gaugeHash);
+        }
+
+        payload = abi.encodeWithSelector(
+            IPlatformNoProof.claim.selector, _bountyId, _user, _gauge, block.timestamp, _gaugeBias, claimData, true
         );
     }
 
-    function _fillBlacklistData(address[] memory _blacklist, bytes32 _gaugeHash)
-        internal
-        view
-        returns (IPlatformNoProof.ClaimData[] memory blacklistData)
-    {
+    function _fillBlacklistData(
+        IPlatformNoProof.ClaimData[] memory claimData,
+        address[] memory _blacklist,
+        bytes32 _gaugeHash
+    ) internal view returns (IPlatformNoProof.ClaimData[] memory) {
         if (_blacklist.length > 0) {
-            blacklistData = new IPlatformNoProof.ClaimData[](_blacklist.length);
             IGaugeVoting.VotedSlope memory userSlope;
+            uint256 initIndex = claimData.length;
 
-            for (uint256 i; i < blacklistData.length;) {
+            for (uint256 i; i < _blacklist.length;) {
                 userSlope = GAUGE_VOTING.voteUserSlopes(_blacklist[i], _gaugeHash);
-                blacklistData[i] = IPlatformNoProof.ClaimData(
+                claimData[i + initIndex] = IPlatformNoProof.ClaimData(
                     _blacklist[i],
                     GAUGE_VOTING.lastUserVote(_blacklist[i], _gaugeHash),
                     userSlope.slope,
@@ -197,6 +192,7 @@ contract BnbGaugeVotingStateSender {
                 }
             }
         }
+        return claimData;
     }
 
     /// @notice Sets the recipient for an address on oracle.
