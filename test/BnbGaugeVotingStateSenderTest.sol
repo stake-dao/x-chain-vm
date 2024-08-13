@@ -61,7 +61,7 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         // check gauge data
         assertGt(gaugeBias, 0);
-        assertEq(ClaimData.length, 1);
+        assertEq(claimData.length, 1);
 
         // check user data
         assertEq(claimData[0].user, USER);
@@ -90,7 +90,7 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         // check gauge bias
         assertGt(gaugeBias, 0);
-        assertEq(ClaimData.length, 2);
+        assertEq(claimData.length, 2);
 
         // check user data
         assertEq(claimData[0].user, USER_2);
