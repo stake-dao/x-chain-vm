@@ -317,6 +317,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     error AUTH_MANAGER_ONLY();
     error INVALID_NUMBER_OF_EPOCHS();
     error WRONG_GAUGE();
+    error WRONG_DATA_EPOCH();
 
     ////////////////////////////////////////////////////////////////
     /// --- CONSTRUCTOR
@@ -484,6 +485,8 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
 
         // Update if needed the current period.
         uint256 currentEpoch = _updateBountyPeriod(_bountyId, _gaugeBias, blacklistData);
+
+        if (currentEpoch > _dataTs) revert WRONG_DATA_EPOCH();
 
         amount += _getClaimable(_claimData[0], _bountyId, bounty, currentEpoch);
 
