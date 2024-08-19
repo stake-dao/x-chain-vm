@@ -51,7 +51,7 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         vm.recordLogs();
 
-        sender.claimOnDstChain(0, USER, GAUGE, GAUGE_CHAIN_ID, DST_CHAIN_ID, blacklist);
+        sender.claimOnDstChain{value: sender.claimMinValue()}(0, USER, GAUGE, GAUGE_CHAIN_ID, DST_CHAIN_ID, blacklist);
 
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
@@ -80,7 +80,9 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         vm.recordLogs();
 
-        sender.claimOnDstChain(0, USER_2, GAUGE_2, GAUGE_CHAIN_ID, DST_CHAIN_ID, blacklist);
+        sender.claimOnDstChain{value: sender.claimMinValue()}(
+            0, USER_2, GAUGE_2, GAUGE_CHAIN_ID, DST_CHAIN_ID, blacklist
+        );
 
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
@@ -112,6 +114,28 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         (bool success,) = address(platform).call(payload);
         assertTrue(success);
+    }
+
+    function testSendClaimStateWithBlacklist() external {
+        address[] memory blacklist = new address[](1);
+        blacklist[0] = USER;
+
+        vm.recordLogs();
+
+        sender.claimOnDstChain{value: sender.claimMinValue()}(
+            0, USER_2, GAUGE_2, GAUGE_CHAIN_ID, DST_CHAIN_ID, blacklist
+        );
+
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
+
+        (uint256 gaugeBias, IPlatformNoProof.ClaimData[] memory claimData) = this._encodePayload(payload);
+
+        // user
+        // proxy
+        // blacklist user 1
+        assertEq(claimData.length, 3);
     }
 
     function _encodePayload(bytes calldata _payload)

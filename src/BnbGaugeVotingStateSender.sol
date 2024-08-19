@@ -9,7 +9,7 @@ import {IPlatformNoProof} from "src/interfaces/IPlatformNoProof.sol";
 import {LibString} from "solady/utils/LibString.sol";
 
 /// @title BnbGaugeVotingStateSender
-/// @notice Sends weekly period block + block hash to a set of destination chains through Axelar
+/// @notice Sends users's gauge voting datas to a supported dst chains through Axelar
 /// @dev This contract uses Axelar network for cross-chain communication
 contract BnbGaugeVotingStateSender {
     using LibString for address;
@@ -67,18 +67,23 @@ contract BnbGaugeVotingStateSender {
         uint256 _dstChainId,
         address[] calldata _blacklist
     ) external payable {
+        // check if msg.value is enough
+        if (msg.value < claimMinValue) revert InsufficientValue();
+
         // check if the user own a proxy
-        (,, address proxy,, uint256 lockEndTime,,,) = VE_CAKE.getUserInfo(_user);
+        (,, address proxy,, uint256 proxyEndTime,,,) = VE_CAKE.getUserInfo(_user);
 
         // check if the proxy is expired
-        if (lockEndTime > 0 && lockEndTime < getCurrentPeriod()) {
+        if (proxy != address(0) && proxyEndTime > 0 && proxyEndTime < getCurrentPeriod()) {
             proxy = address(0);
         }
 
+        // create payload to send to dst chain
         bytes memory payload = _createPayload(_bountyId, _user, proxy, _gauge, _gaugeChainId, _blacklist);
+        address destinationContract = vms[_dstChainId].claimer;
 
-        if (payload.length > 0) {
-            string memory destinationContractHex = vms[_dstChainId].claimer.toHexStringChecksumed();
+        if (payload.length > 0 && destinationContract != address(0)) {
+            string memory destinationContractHex = destinationContract.toHexStringChecksumed();
 
             IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
                 address(this), vms[_dstChainId].chain, destinationContractHex, payload, msg.sender
@@ -88,6 +93,13 @@ contract BnbGaugeVotingStateSender {
         }
     }
 
+    /// @notice Create data payload
+    /// @param _bountyId Bounty ID.
+    /// @param _user Address of the voter.
+    /// @param _proxy Address of the proxy.
+    /// @param _gauge Address of the gauge voted for.
+    /// @param _gaugeChainId Gauge chain id.
+    /// @param _blacklist Blacklist addresses.
     function _createPayload(
         uint256 _bountyId,
         address _user,
@@ -99,44 +111,29 @@ contract BnbGaugeVotingStateSender {
         bytes32 gaugeHash = keccak256(abi.encodePacked(_gauge, _gaugeChainId));
 
         uint256 gaugeBias = GAUGE_VOTING.gaugePointsWeight(gaugeHash, getCurrentPeriod()).bias;
+        uint256 userBalance = VE_CAKE.balanceOf(_user);
 
         // if the user locked CAKE and he has not a proxy
-        if (VE_CAKE.balanceOf(_user) != 0 && _proxy == address(0)) {
-            payload = _createClaimPayload(_user, _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
-        } else if (VE_CAKE.balanceOf(_user) == 0 && _proxy != address(0)) {
+        if (userBalance != 0 && _proxy == address(0)) {
+            payload = _createClaimPayload(_user, address(0), _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
+        } else if (userBalance == 0 && _proxy != address(0)) {
             // if the user did not lock any CAKE but he has a proxy
-            payload = _createClaimPayload(_proxy, _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
-        } else if (VE_CAKE.balanceOf(_user) != 0 && _proxy != address(0)) {
+            payload = _createClaimPayload(_proxy, address(0), _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
+        } else if (userBalance != 0 && _proxy != address(0)) {
             // if the user locked CAKE and has a proxy
-            payload = _createClaimPayloadWithProxy(_user, _proxy, _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
+            payload = _createClaimPayload(_user, _proxy, _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
         }
     }
 
+    /// @notice Create claim payload with proxy.
+    /// @param _user Address of the voter.
+    /// @param _proxy Address of the proxy.
+    /// @param _gauge Address of the gauge voted for.
+    /// @param _bountyId Bounty ID.
+    /// @param _gaugeHash Gauge hash.
+    /// @param _gaugeBias Gauge bias.
+    /// @param _blacklist Blacklist addresses.
     function _createClaimPayload(
-        address _user,
-        address _gauge,
-        uint256 _bountyId,
-        bytes32 _gaugeHash,
-        uint256 _gaugeBias,
-        address[] memory _blacklist
-    ) internal view returns (bytes memory payload) {
-        IPlatformNoProof.ClaimData[] memory claimData = new IPlatformNoProof.ClaimData[](1 + _blacklist.length);
-        IGaugeVoting.VotedSlope memory userSlope = GAUGE_VOTING.voteUserSlopes(_user, _gaugeHash);
-
-        claimData[0] = IPlatformNoProof.ClaimData(
-            _user, GAUGE_VOTING.lastUserVote(_user, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
-        );
-
-        if (_blacklist.length > 0) {
-            claimData = _fillBlacklistData(claimData, _blacklist, _gaugeHash);
-        }
-
-        payload = abi.encodeWithSelector(
-            IPlatformNoProof.claim.selector, _bountyId, _user, _gauge, block.timestamp, _gaugeBias, claimData, false
-        );
-    }
-
-    function _createClaimPayloadWithProxy(
         address _user,
         address _proxy,
         address _gauge,
@@ -145,7 +142,8 @@ contract BnbGaugeVotingStateSender {
         uint256 _gaugeBias,
         address[] calldata _blacklist
     ) internal view returns (bytes memory payload) {
-        IPlatformNoProof.ClaimData[] memory claimData = new IPlatformNoProof.ClaimData[](2 + _blacklist.length);
+        IPlatformNoProof.ClaimData[] memory claimData =
+            new IPlatformNoProof.ClaimData[]((_proxy != address(0) ? 2 : 1) + _blacklist.length);
         IGaugeVoting.VotedSlope memory userSlope;
 
         userSlope = GAUGE_VOTING.voteUserSlopes(_user, _gaugeHash);
@@ -154,33 +152,18 @@ contract BnbGaugeVotingStateSender {
             _user, GAUGE_VOTING.lastUserVote(_user, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
         );
 
-        userSlope = GAUGE_VOTING.voteUserSlopes(_proxy, _gaugeHash);
+        if (_proxy != address(0)) {
+            userSlope = GAUGE_VOTING.voteUserSlopes(_proxy, _gaugeHash);
 
-        claimData[1] = IPlatformNoProof.ClaimData(
-            _proxy, GAUGE_VOTING.lastUserVote(_proxy, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
-        );
-
-        if (_blacklist.length > 0) {
-            claimData = _fillBlacklistData(claimData, _blacklist, _gaugeHash);
+            claimData[1] = IPlatformNoProof.ClaimData(
+                _proxy, GAUGE_VOTING.lastUserVote(_proxy, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
+            );
         }
 
-        payload = abi.encodeWithSelector(
-            IPlatformNoProof.claim.selector, _bountyId, _user, _gauge, block.timestamp, _gaugeBias, claimData, true
-        );
-    }
-
-    function _fillBlacklistData(
-        IPlatformNoProof.ClaimData[] memory claimData,
-        address[] memory _blacklist,
-        bytes32 _gaugeHash
-    ) internal view returns (IPlatformNoProof.ClaimData[] memory) {
         if (_blacklist.length > 0) {
-            IGaugeVoting.VotedSlope memory userSlope;
-            uint256 initIndex = claimData.length;
-
             for (uint256 i; i < _blacklist.length;) {
                 userSlope = GAUGE_VOTING.voteUserSlopes(_blacklist[i], _gaugeHash);
-                claimData[i + initIndex] = IPlatformNoProof.ClaimData(
+                claimData[i + 2] = IPlatformNoProof.ClaimData(
                     _blacklist[i],
                     GAUGE_VOTING.lastUserVote(_blacklist[i], _gaugeHash),
                     userSlope.slope,
@@ -192,7 +175,10 @@ contract BnbGaugeVotingStateSender {
                 }
             }
         }
-        return claimData;
+
+        payload = abi.encodeWithSelector(
+            IPlatformNoProof.claim.selector, _bountyId, _user, _gauge, block.timestamp, _gaugeBias, claimData, true
+        );
     }
 
     /// @notice Sets the recipient for an address on oracle.
