@@ -85,13 +85,13 @@ abstract contract BasePlatformTest is Utils {
         assertEq(BaseGaugeControllerOracle(oracles[1]).activePeriod(), _getCurrentPeriod());
     }
 
-    function testSetRecipient() public {
+    function testSetRecipient() public virtual {
         address FAKE_RECIPIENT = address(0xCACA);
         BaseGaugeControllerOracle(oracles[0]).setRecipient(_user, FAKE_RECIPIENT);
         assertEq(BaseGaugeControllerOracle(oracles[0]).recipient(_user), FAKE_RECIPIENT);
     }
 
-    function testSetRecipientWrongAuth() public {
+    function testSetRecipientWrongAuth() public virtual {
         address FAKE_RECIPIENT = address(0xCACA);
 
         // Random User

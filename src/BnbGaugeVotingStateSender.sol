@@ -187,18 +187,22 @@ contract BnbGaugeVotingStateSender {
     function setRecipient(uint256 _dstChainId, address _recipient) external payable {
         if (msg.value < setRecipientMinValue) revert InsufficientValue();
 
-        string memory _destinationContract = vms[_dstChainId].claimer.toHexStringChecksumed();
-        bytes memory payload = abi.encodeWithSignature("setRecipient(address,address)", msg.sender, _recipient);
+        address destinationContract = vms[_dstChainId].claimer;
 
-        string memory dstChain = vms[_dstChainId].chain;
+        if (destinationContract != address(0)) {
+            bytes memory payload = abi.encodeWithSignature("setRecipient(address,address)", msg.sender, _recipient);
 
-        IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
-            address(this), dstChain, _destinationContract, payload, msg.sender
-        );
+            string memory dstChain = vms[_dstChainId].chain;
+            string memory destinationContractHex = destinationContract.toHexStringChecksumed();
 
-        IAxelarGateway(AXELAR_GATEWAY).callContract(dstChain, _destinationContract, payload);
+             IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
+                address(this), dstChain, destinationContractHex, payload, msg.sender
+            );
+            
+            IAxelarGateway(AXELAR_GATEWAY).callContract(dstChain, destinationContractHex, payload);
 
-        emit RecipientSet(msg.sender, _recipient, dstChain);
+            emit RecipientSet(msg.sender, _recipient, dstChain);
+        }
     }
 
     /// @notice Set a xchain vote market info.

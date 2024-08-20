@@ -183,6 +183,9 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     /// @notice Gauge adjusted bias to count blacklist ID => period => bias
     mapping(uint256 => mapping(uint256 => uint256)) public gaugesAdjustedBias;
 
+    /// @notice Whitelisted Address(Liquid Wrappers) to prevent claiming on their behalf if no recipient is set.
+    mapping(address => bool) public whitelisted;
+
     ////////////////////////////////////////////////////////////////
     /// --- MODIFIERS
     ///////////////////////////////////////////////////////////////
@@ -312,6 +315,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     error INVALID_TOKEN();
     error ALREADY_CLOSED();
     error NO_PERIODS_LEFT();
+    error NO_RECEIVER_SET_FOR_WHITELISTED();
     error NOT_UPGRADEABLE();
     error AUTH_CLAIMER_ONLY();
     error AUTH_MANAGER_ONLY();
@@ -417,36 +421,43 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
         }
     }
 
+    /// @notice Claim rewards for a given bounty.
+    /// @param _bountyId ID of the bounty.
+    /// @param _user User to claim for.
+    /// @param _gauge Address of the bounty's gauge
+    /// @param _dataTs Data timestamp
+    /// @param _gaugeBias Gauge bias
+    /// @param _claimData Array of claim data (blacklisted included)
+    /// @param _bothData if the claimData array contain both locker/proxy datas
     function claim(
         uint256 _bountyId,
-        address _recipient,
+        address _user,
         address _gauge,
         uint256 _dataTs,
         uint256 _gaugeBias,
         ClaimData[] calldata _claimData,
         bool _bothData
-    ) external {
-        _claim(_bountyId, _recipient, _gauge, _dataTs, _gaugeBias, _claimData, _bothData);
+    ) external notKilled onlyClaimer {
+        address _recipient = recipient[_user];
+        if (whitelisted[_user] && _recipient == address(0)) revert NO_RECEIVER_SET_FOR_WHITELISTED();
+        _claim(_bountyId, _recipient != address(0) ? _recipient : _user, _gauge, _dataTs, _gaugeBias, _claimData, _bothData);
     }
-
-    /// @notice Claim rewards for a given bounty.
-    /// @param user User to claim for.
-    /// @param bountyId ID of the bounty.
-    /// @return Amount of rewards claimed.
-    // function claimFor(address user, uint256 bountyId) external returns (uint256) {
-    //     address _recipient = recipient[user];
-
-    //     return _claim(user, _recipient != address(0) ? _recipient : user, bountyId);
-    // }
 
     /// @notice Set a recipient address for calling user.
     /// @param _recipient Address of the recipient.
     /// @dev Recipient are used when calling claimFor functions. Regular functions will use msg.sender as recipient,
     ///  or recipient parameter provided if called by msg.sender.
-    function setRecipient(address _recipient) external {
-        recipient[msg.sender] = _recipient;
+    function setRecipient(address _sender, address _recipient) external onlyClaimer {
+        recipient[_sender] = _recipient;
 
-        emit RecipientSet(msg.sender, _recipient);
+        emit RecipientSet(_sender, _recipient);
+    }
+
+    /// @notice Whitelist an address to prevent claim without recipient set
+    /// @param _address Address to whitelist
+    /// @param _isWhitelist if whitelist or not delist the address
+    function whitelistAddress(address _address, bool _isWhitelist) external onlyOwner {
+        whitelisted[_address] = _isWhitelist;
     }
 
     ////////////////////////////////////////////////////////////////
@@ -455,11 +466,12 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
 
     /// @notice Claim rewards for a given bounty.
     /// @param _bountyId ID of the bounty.
-    /// @param _userClaimData ClaimData of the voter.
-    /// @param _proxyClaimData ClaimData of the proxy.
-    /// @param _recipient Address of the recipient.
-
-    /// @return amount of rewards claimed.
+    /// @param _recipient Address of the recipient
+    /// @param _gauge Address of the gauge.
+    /// @param _dataTs Claim data timestamp.
+    /// @param _gaugeBias Gauge bias.
+    /// @param _claimData Array of claim data
+    /// @param _bothClaim if the claimData array contains both locker/proxy claim data
     function _claim(
         uint256 _bountyId,
         address _recipient,
@@ -468,7 +480,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
         uint256 _gaugeBias,
         ClaimData[] calldata _claimData,
         bool _bothClaim
-    ) internal notKilled onlyClaimer returns (uint256 amount) {
+    ) internal {
         Bounty storage bounty = bounties[_bountyId];
 
         // check if the user bridged the voting data for the correct gauge
@@ -488,7 +500,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
 
         if (currentEpoch > _dataTs) revert WRONG_DATA_EPOCH();
 
-        amount += _getClaimable(_claimData[0], _bountyId, bounty, currentEpoch);
+        uint256 amount = _getClaimable(_claimData[0], _bountyId, bounty, currentEpoch);
 
         // if user own both locker and proxy
         if (_bothClaim) {
@@ -496,7 +508,7 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
         }
 
         if (amount == 0) {
-            return 0;
+            return;
         }
 
         // Update the amount claimed.
