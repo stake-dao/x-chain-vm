@@ -58,7 +58,7 @@ import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 /// @author Stake DAO
 /// @notice VoteMarket for PancakeSwap gauges. Takes into account the 2 weeks voting Epoch, so claimable period active on EVEN week Thursday.
 /// @dev Forked from Platform contract
-contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
+contract Platform is Owned, ReentrancyGuard, IPlatformNoProof {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
@@ -440,7 +440,9 @@ contract PlatformNoProof is Owned, ReentrancyGuard, IPlatformNoProof {
     ) external notKilled onlyClaimer {
         address _recipient = recipient[_user];
         if (whitelisted[_user] && _recipient == address(0)) revert NO_RECEIVER_SET_FOR_WHITELISTED();
-        _claim(_bountyId, _recipient != address(0) ? _recipient : _user, _gauge, _dataTs, _gaugeBias, _claimData, _bothData);
+        _claim(
+            _bountyId, _recipient != address(0) ? _recipient : _user, _gauge, _dataTs, _gaugeBias, _claimData, _bothData
+        );
     }
 
     /// @notice Set a recipient address for calling user.

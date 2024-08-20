@@ -3,7 +3,7 @@ pragma solidity ^0.8.19;
 
 import "test/utils/Utils.sol";
 
-import {PlatformNoProof} from "src/pancakeswap/PlatformNoProof.sol";
+import {Platform} from "src/pancakeswap/Platform.sol";
 import {IPlatformNoProof} from "src/interfaces/IPlatformNoProof.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -15,7 +15,7 @@ import {BasePlatformTest} from "test/integration/BasePlatformTest.sol";
 contract PancakePlatformTest is BasePlatformTest {
     using LibString for address;
 
-    PlatformNoProof internal pancakePlatform;
+    Platform internal pancakePlatform;
     uint256 internal chainId;
     address internal _user_proxy;
     BnbGaugeVotingStateSender internal bnbSender;
@@ -41,7 +41,7 @@ contract PancakePlatformTest is BasePlatformTest {
 
         claimer = new AxelarExecutableClaimer(address(_gateway), address(bnbSender), "binance", address(0));
 
-        pancakePlatform = new PlatformNoProof(_deployer, _deployer, address(claimer));
+        pancakePlatform = new Platform(_deployer, _deployer, address(claimer));
 
         claimer.transferOwnership(_deployer);
 
@@ -62,7 +62,12 @@ contract PancakePlatformTest is BasePlatformTest {
 
     function testSetRecipientWithClaimer() public {
         address recipient = address(0xABCD);
-        claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), abi.encodeWithSelector(PlatformNoProof.setRecipient.selector, address(this), recipient));
+        claimer.execute(
+            "",
+            "binance",
+            address(bnbSender).toHexStringChecksumed(),
+            abi.encodeWithSelector(Platform.setRecipient.selector, address(this), recipient)
+        );
 
         assertEq(pancakePlatform.recipient(address(this)), recipient);
     }
@@ -93,15 +98,15 @@ contract PancakePlatformTest is BasePlatformTest {
         // 16 July (Tuesday)
         uint256 _id = _createDefaultBounty(3);
         _checkpointGauge(_gauge);
-        
+
         skip(6 days);
-        
+
         // 22 July
 
         // simulate state sender to create claim data for user
         address[] memory blacklist;
 
-        bytes memory payload = _createClaimPayload(_id, _user, _gauge, chainId, blacklist); 
+        bytes memory payload = _createClaimPayload(_id, _user, _gauge, chainId, blacklist);
 
         (uint256 gaugeBias, IPlatformNoProof.ClaimData[] memory claimData) = this._encodePayload(payload);
         assertEq(claimData.length, 2);
@@ -140,7 +145,7 @@ contract PancakePlatformTest is BasePlatformTest {
 
         vm.prank(_deployer);
         pancakePlatform.whitelistAddress(_user, true);
-        
+
         skip(8 days);
 
         address[] memory blacklist;
@@ -151,7 +156,12 @@ contract PancakePlatformTest is BasePlatformTest {
         claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
 
         address recipient = address(0xABCD);
-        claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), abi.encodeWithSelector(PlatformNoProof.setRecipient.selector, _user, recipient));
+        claimer.execute(
+            "",
+            "binance",
+            address(bnbSender).toHexStringChecksumed(),
+            abi.encodeWithSelector(Platform.setRecipient.selector, _user, recipient)
+        );
 
         claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
     }
@@ -163,7 +173,7 @@ contract PancakePlatformTest is BasePlatformTest {
 
         vm.prank(_deployer);
         pancakePlatform.whitelistAddress(_user, true);
-        
+
         skip(8 days);
 
         address[] memory blacklist;
@@ -171,7 +181,12 @@ contract PancakePlatformTest is BasePlatformTest {
         bytes memory payload = _createClaimPayload(_id, _user, _gauge, chainId, blacklist);
 
         address recipient = address(0xABCD);
-        claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), abi.encodeWithSelector(PlatformNoProof.setRecipient.selector, _user, recipient));
+        claimer.execute(
+            "",
+            "binance",
+            address(bnbSender).toHexStringChecksumed(),
+            abi.encodeWithSelector(Platform.setRecipient.selector, _user, recipient)
+        );
 
         uint256 recipientSnapshot = rewardToken.balanceOf(recipient);
         claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
@@ -195,11 +210,11 @@ contract PancakePlatformTest is BasePlatformTest {
         uint256 _id = _createDefaultBounty(3);
         _checkpointGauge(_gauge);
 
-        PlatformNoProof.Bounty memory bounty = pancakePlatform.getBounty(_id);
+        Platform.Bounty memory bounty = pancakePlatform.getBounty(_id);
 
         pancakePlatform.closeBounty(_id);
 
-        PlatformNoProof.Bounty memory bountyNotClosed = pancakePlatform.getBounty(_id);
+        Platform.Bounty memory bountyNotClosed = pancakePlatform.getBounty(_id);
 
         assertEq(bounty.manager, bountyNotClosed.manager);
 
@@ -207,7 +222,7 @@ contract PancakePlatformTest is BasePlatformTest {
 
         pancakePlatform.closeBounty(_id);
 
-        PlatformNoProof.Bounty memory bountyClosed = pancakePlatform.getBounty(_id);
+        Platform.Bounty memory bountyClosed = pancakePlatform.getBounty(_id);
 
         assertEq(bountyClosed.manager, address(0));
     }
@@ -258,10 +273,18 @@ contract PancakePlatformTest is BasePlatformTest {
         _position = uint256(keccak256(abi.encode(_user, 8)));
     }
 
-    function _createClaimPayload(uint256 _bountyId, address user, address gauge, uint256 _chainId, address[] memory _blacklist) internal returns (bytes memory _payload) {
+    function _createClaimPayload(
+        uint256 _bountyId,
+        address user,
+        address gauge,
+        uint256 _chainId,
+        address[] memory _blacklist
+    ) internal returns (bytes memory _payload) {
         vm.recordLogs();
 
-        bnbSender.claimOnDstChain{value: bnbSender.claimMinValue()}(_bountyId, user, gauge, _chainId, _chainId, _blacklist);
+        bnbSender.claimOnDstChain{value: bnbSender.claimMinValue()}(
+            _bountyId, user, gauge, _chainId, _chainId, _blacklist
+        );
 
         Vm.Log[] memory entries = vm.getRecordedLogs();
 

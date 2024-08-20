@@ -195,10 +195,10 @@ contract BnbGaugeVotingStateSender {
             string memory dstChain = vms[_dstChainId].chain;
             string memory destinationContractHex = destinationContract.toHexStringChecksumed();
 
-             IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
+            IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
                 address(this), dstChain, destinationContractHex, payload, msg.sender
             );
-            
+
             IAxelarGateway(AXELAR_GATEWAY).callContract(dstChain, destinationContractHex, payload);
 
             emit RecipientSet(msg.sender, _recipient, dstChain);
