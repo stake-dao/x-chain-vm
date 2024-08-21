@@ -5,7 +5,7 @@ import {IGaugeVoting} from "src/interfaces/IGaugeVoting.sol";
 import {IVotingEscrow} from "src/interfaces/IVotingEscrow.sol";
 import {IAxelarGateway} from "src/interfaces/IAxelarGateway.sol";
 import {IAxelarGasReceiverProxy} from "src/interfaces/IAxelarGasReceiverProxy.sol";
-import {IPlatformNoProof} from "src/interfaces/IPlatformNoProof.sol";
+import {IPlatform} from "src/interfaces/IPlatform.sol";
 import {LibString} from "solady/utils/LibString.sol";
 
 /// @title BnbGaugeVotingStateSender
@@ -34,6 +34,7 @@ contract BnbGaugeVotingStateSender {
 
     error GovernanceOnly();
     error InsufficientValue();
+    error UserWithoutSlope();
 
     event GovernanceChanged(address indexed newGovernance);
     event RecipientSet(address indexed sender, address indexed recipient, string indexed chain);
@@ -70,19 +71,35 @@ contract BnbGaugeVotingStateSender {
         // check if msg.value is enough
         if (msg.value < claimMinValue) revert InsufficientValue();
 
-        // check if the user own a proxy
-        (,, address proxy,, uint256 proxyEndTime,,,) = VE_CAKE.getUserInfo(_user);
+        // calculate total slope
+        IPlatform.ClaimData[] memory claimData = new IPlatform.ClaimData[](1 + _blacklist.length);
 
-        // check if the proxy is expired
-        if (proxy != address(0) && proxyEndTime > 0 && proxyEndTime < getCurrentPeriod()) {
-            proxy = address(0);
+        bytes32 gaugeHash = keccak256(abi.encodePacked(_gauge, _gaugeChainId));
+
+        // get user claim data (locker and/or proxy)
+        claimData[0] = _getClaimData(_user, gaugeHash);
+
+        if (claimData[0].userVoteSlope == 0) revert UserWithoutSlope();
+
+        // fill blacklist counting the user's proxy too
+        if (_blacklist.length > 0) {
+            for (uint256 i; i < _blacklist.length;) {
+                claimData[i + 1] = _getClaimData(_blacklist[i], gaugeHash);
+                unchecked {
+                    ++i;
+                }
+            }
         }
 
+        // calculate payload to bridge
+        bytes memory payload = abi.encodeWithSelector(
+            IPlatform.claim.selector, _bountyId, _gauge, block.timestamp, _getGaugeBias(gaugeHash), claimData
+        );
+
         // create payload to send to dst chain
-        bytes memory payload = _createPayload(_bountyId, _user, proxy, _gauge, _gaugeChainId, _blacklist);
         address destinationContract = vms[_dstChainId].claimer;
 
-        if (payload.length > 0 && destinationContract != address(0)) {
+        if (destinationContract != address(0)) {
             string memory destinationContractHex = destinationContract.toHexStringChecksumed();
 
             IAxelarGasReceiverProxy(AXELAR_GAS_RECEIVER).payNativeGasForContractCall{value: msg.value}(
@@ -93,92 +110,41 @@ contract BnbGaugeVotingStateSender {
         }
     }
 
-    /// @notice Create data payload
-    /// @param _bountyId Bounty ID.
+    /// @notice Get claim data
     /// @param _user Address of the voter.
-    /// @param _proxy Address of the proxy.
-    /// @param _gauge Address of the gauge voted for.
-    /// @param _gaugeChainId Gauge chain id.
-    /// @param _blacklist Blacklist addresses.
-    function _createPayload(
-        uint256 _bountyId,
-        address _user,
-        address _proxy,
-        address _gauge,
-        uint256 _gaugeChainId,
-        address[] calldata _blacklist
-    ) internal view returns (bytes memory payload) {
-        bytes32 gaugeHash = keccak256(abi.encodePacked(_gauge, _gaugeChainId));
+    /// @param _gaugeHash Gauge hash.
+    function _getClaimData(address _user, bytes32 _gaugeHash) internal returns (IPlatform.ClaimData memory claimData) {
+        claimData.user = _user;
 
-        uint256 gaugeBias = GAUGE_VOTING.gaugePointsWeight(gaugeHash, getCurrentPeriod()).bias;
-        uint256 userBalance = VE_CAKE.balanceOf(_user);
+        IGaugeVoting.VotedSlope memory userSlope = GAUGE_VOTING.voteUserSlopes(_user, _gaugeHash);
 
-        // if the user locked CAKE and he has not a proxy
-        if (userBalance != 0 && _proxy == address(0)) {
-            payload = _createClaimPayload(_user, address(0), _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
-        } else if (userBalance == 0 && _proxy != address(0)) {
-            // if the user did not lock any CAKE but he has a proxy
-            payload = _createClaimPayload(_proxy, address(0), _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
-        } else if (userBalance != 0 && _proxy != address(0)) {
-            // if the user locked CAKE and has a proxy
-            payload = _createClaimPayload(_user, _proxy, _gauge, _bountyId, gaugeHash, gaugeBias, _blacklist);
+        // check if the locker is not expired
+        if (userSlope.end > getCurrentPeriod()) {
+            claimData.userVoteSlope += userSlope.slope;
+            claimData.lastVote = GAUGE_VOTING.lastUserVote(_user, _gaugeHash);
+            claimData.userVoteEnd = userSlope.end;
+        }
+
+        // check if the user own a proxy
+        (,, address proxy,, uint256 proxyEndTime,,,) = VE_CAKE.getUserInfo(_user);
+
+        // check if the proxy is not expired
+        if (proxy != address(0) && proxyEndTime > getCurrentPeriod()) {
+            userSlope = GAUGE_VOTING.voteUserSlopes(proxy, _gaugeHash);
+            claimData.userVoteSlope += userSlope.slope;
+            if (claimData.lastVote == 0) {
+                claimData.lastVote = GAUGE_VOTING.lastUserVote(proxy, _gaugeHash);
+            }
+            if (claimData.userVoteEnd == 0 || claimData.userVoteEnd > userSlope.end) {
+                claimData.userVoteEnd = userSlope.end;
+            }
         }
     }
 
-    /// @notice Create claim payload with proxy.
-    /// @param _user Address of the voter.
-    /// @param _proxy Address of the proxy.
-    /// @param _gauge Address of the gauge voted for.
-    /// @param _bountyId Bounty ID.
-    /// @param _gaugeHash Gauge hash.
-    /// @param _gaugeBias Gauge bias.
-    /// @param _blacklist Blacklist addresses.
-    function _createClaimPayload(
-        address _user,
-        address _proxy,
-        address _gauge,
-        uint256 _bountyId,
-        bytes32 _gaugeHash,
-        uint256 _gaugeBias,
-        address[] calldata _blacklist
-    ) internal view returns (bytes memory payload) {
-        IPlatformNoProof.ClaimData[] memory claimData =
-            new IPlatformNoProof.ClaimData[]((_proxy != address(0) ? 2 : 1) + _blacklist.length);
-        IGaugeVoting.VotedSlope memory userSlope;
-
-        userSlope = GAUGE_VOTING.voteUserSlopes(_user, _gaugeHash);
-
-        claimData[0] = IPlatformNoProof.ClaimData(
-            _user, GAUGE_VOTING.lastUserVote(_user, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
-        );
-
-        if (_proxy != address(0)) {
-            userSlope = GAUGE_VOTING.voteUserSlopes(_proxy, _gaugeHash);
-
-            claimData[1] = IPlatformNoProof.ClaimData(
-                _proxy, GAUGE_VOTING.lastUserVote(_proxy, _gaugeHash), userSlope.slope, userSlope.power, userSlope.end
-            );
-        }
-
-        if (_blacklist.length > 0) {
-            for (uint256 i; i < _blacklist.length;) {
-                userSlope = GAUGE_VOTING.voteUserSlopes(_blacklist[i], _gaugeHash);
-                claimData[i + 2] = IPlatformNoProof.ClaimData(
-                    _blacklist[i],
-                    GAUGE_VOTING.lastUserVote(_blacklist[i], _gaugeHash),
-                    userSlope.slope,
-                    userSlope.power,
-                    userSlope.end
-                );
-                unchecked {
-                    ++i;
-                }
-            }
-        }
-
-        payload = abi.encodeWithSelector(
-            IPlatformNoProof.claim.selector, _bountyId, _user, _gauge, block.timestamp, _gaugeBias, claimData, true
-        );
+    /// @notice Get gauge bias for the current period
+    /// @param _gaugeHash Gauge hash
+    function _getGaugeBias(bytes32 _gaugeHash) internal returns (uint256 gaugeBias) {
+        gaugeBias = GAUGE_VOTING.gaugePointsWeight(_gaugeHash, getCurrentPeriod()).bias;
     }
 
     /// @notice Sets the recipient for an address on oracle.

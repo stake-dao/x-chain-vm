@@ -49,7 +49,7 @@ pragma solidity ^0.8.19;
 import {Owned} from "solmate/auth/Owned.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IGaugeVoting} from "src/interfaces/IGaugeVoting.sol";
-import {IPlatformNoProof} from "src/interfaces/IPlatformNoProof.sol";
+import {IPlatform} from "src/interfaces/IPlatform.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
@@ -58,7 +58,7 @@ import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 /// @author Stake DAO
 /// @notice VoteMarket for PancakeSwap gauges. Takes into account the 2 weeks voting Epoch, so claimable period active on EVEN week Thursday.
 /// @dev Forked from Platform contract
-contract Platform is Owned, ReentrancyGuard, IPlatformNoProof {
+contract Platform is Owned, ReentrancyGuard, IPlatform {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
@@ -423,26 +423,21 @@ contract Platform is Owned, ReentrancyGuard, IPlatformNoProof {
 
     /// @notice Claim rewards for a given bounty.
     /// @param _bountyId ID of the bounty.
-    /// @param _user User to claim for.
     /// @param _gauge Address of the bounty's gauge
     /// @param _dataTs Data timestamp
     /// @param _gaugeBias Gauge bias
     /// @param _claimData Array of claim data (blacklisted included)
-    /// @param _bothData if the claimData array contain both locker/proxy datas
     function claim(
         uint256 _bountyId,
-        address _user,
         address _gauge,
         uint256 _dataTs,
         uint256 _gaugeBias,
-        ClaimData[] calldata _claimData,
-        bool _bothData
+        ClaimData[] calldata _claimData
     ) external notKilled onlyClaimer {
-        address _recipient = recipient[_user];
-        if (whitelisted[_user] && _recipient == address(0)) revert NO_RECEIVER_SET_FOR_WHITELISTED();
-        _claim(
-            _bountyId, _recipient != address(0) ? _recipient : _user, _gauge, _dataTs, _gaugeBias, _claimData, _bothData
-        );
+        address user = _claimData[0].user;
+        address _recipient = recipient[user];
+        if (whitelisted[user] && _recipient == address(0)) revert NO_RECEIVER_SET_FOR_WHITELISTED();
+        _claim(_bountyId, _recipient != address(0) ? _recipient : user, _gauge, _dataTs, _gaugeBias, _claimData);
     }
 
     /// @notice Set a recipient address for calling user.
@@ -473,15 +468,13 @@ contract Platform is Owned, ReentrancyGuard, IPlatformNoProof {
     /// @param _dataTs Claim data timestamp.
     /// @param _gaugeBias Gauge bias.
     /// @param _claimData Array of claim data
-    /// @param _bothClaim if the claimData array contains both locker/proxy claim data
     function _claim(
         uint256 _bountyId,
         address _recipient,
         address _gauge,
         uint256 _dataTs,
         uint256 _gaugeBias,
-        ClaimData[] calldata _claimData,
-        bool _bothClaim
+        ClaimData[] calldata _claimData
     ) internal {
         Bounty storage bounty = bounties[_bountyId];
 
@@ -491,9 +484,7 @@ contract Platform is Owned, ReentrancyGuard, IPlatformNoProof {
         ClaimData[] memory blacklistData;
 
         // check if there is any blacklist data
-        if (_bothClaim && _claimData.length > 2) {
-            blacklistData = _claimData[2:];
-        } else if (!_bothClaim && _claimData.length > 1) {
+        if (_claimData.length > 1) {
             blacklistData = _claimData[1:];
         }
 
@@ -502,12 +493,8 @@ contract Platform is Owned, ReentrancyGuard, IPlatformNoProof {
 
         if (currentEpoch > _dataTs) revert WRONG_DATA_EPOCH();
 
+        // user claim data with locker and/or proxy
         uint256 amount = _getClaimable(_claimData[0], _bountyId, bounty, currentEpoch);
-
-        // if user own both locker and proxy
-        if (_bothClaim) {
-            amount += _getClaimable(_claimData[1], _bountyId, bounty, currentEpoch);
-        }
 
         if (amount == 0) {
             return;

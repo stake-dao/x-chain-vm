@@ -5,14 +5,14 @@ import "test/utils/Utils.sol";
 import {IAxelarGateway} from "src/interfaces/IAxelarGateway.sol";
 import {IAxelarGasReceiverProxy} from "src/interfaces/IAxelarGasReceiverProxy.sol";
 import {BnbGaugeVotingStateSender} from "src/BnbGaugeVotingStateSender.sol";
-import {IPlatformNoProof} from "src/interfaces/IPlatformNoProof.sol";
+import {IPlatform} from "src/interfaces/IPlatform.sol";
 import {AxelarExecutableClaimer} from "src/AxelarExecutableClaimer.sol";
-import {MockPancakePlatformNoProof} from "test/mocks/MockPancakePlatformNoProof.sol";
+import {MockPancakePlatform} from "test/mocks/MockPancakePlatform.sol";
 
 contract BnbGaugeVotingStateSenderTest is Utils {
     BnbGaugeVotingStateSender internal sender;
     AxelarExecutableClaimer internal claimer;
-    MockPancakePlatformNoProof internal platform;
+    MockPancakePlatform internal platform;
 
     struct ClaimData {
         address user;
@@ -39,7 +39,7 @@ contract BnbGaugeVotingStateSenderTest is Utils {
         // deploy all contracts in the same chain
         sender = new BnbGaugeVotingStateSender(address(this), 0.003 ether, 0.001 ether);
 
-        platform = new MockPancakePlatformNoProof();
+        platform = new MockPancakePlatform();
 
         claimer = new AxelarExecutableClaimer(sender.AXELAR_GATEWAY(), address(sender), "binance", address(platform));
 
@@ -57,7 +57,7 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
 
-        (uint256 gaugeBias, IPlatformNoProof.ClaimData[] memory claimData) = this._encodePayload(payload);
+        (uint256 gaugeBias, IPlatform.ClaimData[] memory claimData) = this._encodePayload(payload);
 
         // check gauge data
         assertGt(gaugeBias, 0);
@@ -68,7 +68,6 @@ contract BnbGaugeVotingStateSenderTest is Utils {
         assertGt(claimData[0].lastVote, 0);
         assertGt(claimData[0].lastVote, getCurrentPeriod());
         assertGt(claimData[0].userVoteSlope, 0);
-        assertEq(claimData[0].userVotePower, 1000);
         assertGt(claimData[0].userVoteEnd, getCurrentPeriod());
 
         (bool success,) = address(platform).call(payload);
@@ -88,29 +87,28 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
 
-        (uint256 gaugeBias, IPlatformNoProof.ClaimData[] memory claimData) = this._encodePayload(payload);
+        (uint256 gaugeBias, IPlatform.ClaimData[] memory claimData) = this._encodePayload(payload);
 
         // check gauge bias
         assertGt(gaugeBias, 0);
-        assertEq(claimData.length, 2);
+        assertEq(claimData.length, 1);
 
-        // check user data
+        // check user+proxy data
         assertEq(claimData[0].user, USER_2);
         assertGt(claimData[0].lastVote, 0);
         assertGt(claimData[0].lastVote, getCurrentPeriod());
         assertGt(claimData[0].userVoteSlope, 0);
-        assertEq(claimData[0].userVotePower, 10000);
         assertGt(claimData[0].userVoteEnd, getCurrentPeriod());
 
         // check proxy data
-        assertEq(claimData[1].user, USER_2_PROXY);
-        assertGt(claimData[1].lastVote, 0);
-        assertGt(claimData[1].lastVote, getCurrentPeriod());
-        assertGt(claimData[1].userVoteSlope, 0);
-        assertEq(claimData[1].userVotePower, 10000);
-        assertGt(claimData[1].userVoteEnd, getCurrentPeriod());
+        // assertEq(claimData[1].user, USER_2_PROXY);
+        // assertGt(claimData[1].lastVote, 0);
+        // assertGt(claimData[1].lastVote, getCurrentPeriod());
+        // assertGt(claimData[1].userVoteSlope, 0);
+        // assertEq(claimData[1].userVotePower, 10000);
+        // assertGt(claimData[1].userVoteEnd, getCurrentPeriod());
 
-        assertEq(claimData[0].lastVote, claimData[1].lastVote);
+        // assertEq(claimData[0].lastVote, claimData[1].lastVote);
 
         (bool success,) = address(platform).call(payload);
         assertTrue(success);
@@ -130,21 +128,20 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
 
-        (uint256 gaugeBias, IPlatformNoProof.ClaimData[] memory claimData) = this._encodePayload(payload);
+        (uint256 gaugeBias, IPlatform.ClaimData[] memory claimData) = this._encodePayload(payload);
 
-        // user
-        // proxy
+        // user+proxy
         // blacklist user 1
-        assertEq(claimData.length, 3);
+        assertEq(claimData.length, 2);
     }
 
     function _encodePayload(bytes calldata _payload)
         public
         pure
-        returns (uint256 gaugeBias, IPlatformNoProof.ClaimData[] memory claimData)
+        returns (uint256 gaugeBias, IPlatform.ClaimData[] memory claimData)
     {
-        (,,,, gaugeBias, claimData,) =
-            abi.decode(_payload[4:], (uint256, address, address, uint256, uint256, IPlatformNoProof.ClaimData[], bool));
+        (,,, gaugeBias, claimData) =
+            abi.decode(_payload[4:], (uint256, address, uint256, uint256, IPlatform.ClaimData[]));
     }
 
     function getCurrentPeriod() public view returns (uint256) {
