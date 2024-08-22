@@ -67,8 +67,8 @@ contract BnbGaugeVotingStateSenderTest is Utils {
         assertEq(claimData[0].user, USER);
         assertGt(claimData[0].lastVote, 0);
         assertGt(claimData[0].lastVote, getCurrentPeriod());
-        assertGt(claimData[0].userVoteSlope, 0);
-        assertGt(claimData[0].userVoteEnd, getCurrentPeriod());
+        assertGt(claimData[0].userVoteBias, 0);
+        //assertGt(claimData[0].userVoteEnd, getCurrentPeriod());
 
         (bool success,) = address(platform).call(payload);
         assertTrue(success);
@@ -97,8 +97,8 @@ contract BnbGaugeVotingStateSenderTest is Utils {
         assertEq(claimData[0].user, USER_2);
         assertGt(claimData[0].lastVote, 0);
         assertGt(claimData[0].lastVote, getCurrentPeriod());
-        assertGt(claimData[0].userVoteSlope, 0);
-        assertGt(claimData[0].userVoteEnd, getCurrentPeriod());
+        assertGt(claimData[0].userVoteBias, 0);
+        //assertGt(claimData[0].userVoteEnd, getCurrentPeriod());
 
         // check proxy data
         // assertEq(claimData[1].user, USER_2_PROXY);

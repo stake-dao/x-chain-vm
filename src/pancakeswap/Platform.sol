@@ -537,8 +537,7 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
                 currentEpoch,
                 getCurrentEpoch(),
                 amountClaimed[_bountyId],
-                _claimData.userVoteSlope,
-                _claimData.userVoteEnd
+                _claimData.userVoteBias
             )
         ) {
             return 0;
@@ -549,7 +548,8 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
 
         // Voting Power = userSlope * dt
         // with dt = lock_end - period.
-        uint256 _bias = _getAddrBias(_claimData.userVoteSlope, _claimData.userVoteEnd, currentEpoch); // we are in the epoch after the voting period (active period)
+        //uint256 _bias = _getAddrBias(_claimData.userVoteSlope, _claimData.userVoteEnd, currentEpoch); // we are in the epoch after the voting period (active period)
+        uint256 _bias = _claimData.userVoteBias;
         // Compute the reward amount based on
         // Reward / Total Votes.
         amount = _bias.mulWad(rewardPerVote[_bountyId]);
@@ -568,23 +568,21 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
         uint256 currentEpoch,
         uint256 _activePeriod,
         uint256 _amountClaimed,
-        uint256 _userSlope,
-        uint256 _userLockEnd
+        uint256 _userBias
     ) internal view returns (bool) {
         // To ensure we will claim only on the active period week
         /// The user can't claim if:
         if (
             /// If the user is blacklisted.
-            /// If the user has no voting power.
+            /// If the user has no bias.
             // If the user already claimed for the current period.
-            /// If the user's lock ended.
             /// If the user voted after the current period.
             /// If the bounty ended.
             /// User can only claim on the active period week;
             /// If the bounty is empty.
-            isBlacklisted[_bountyId][_user] || _userSlope == 0 || lastUserClaim[_user][_bountyId] >= currentEpoch
-                || currentEpoch >= _userLockEnd || currentEpoch <= _lastVote || currentEpoch >= _bounty.endTimestamp
-                || currentEpoch != _activePeriod || _amountClaimed == _bounty.totalRewardAmount
+            isBlacklisted[_bountyId][_user] || _userBias == 0 || lastUserClaim[_user][_bountyId] >= currentEpoch
+                || currentEpoch <= _lastVote || currentEpoch >= _bounty.endTimestamp || currentEpoch != _activePeriod
+                || _amountClaimed == _bounty.totalRewardAmount
         ) {
             return false;
         }
@@ -721,12 +719,12 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
     /// @dev Returns only claimable for current week. For previous weeks rewards, if it was checkpointed, use `checkpointedBalances`
     /// @return amount of rewards.
     /// Mainly used for UI.
-    function claimable(
-        uint256 _bountyId,
-        uint256 _gaugeBias,
-        ClaimData[] calldata _claimData
-    ) external view returns (uint256 amount) {
-        if (_claimData[0].userVoteSlope != 0) {
+    function claimable(uint256 _bountyId, uint256 _gaugeBias, ClaimData[] calldata _claimData)
+        external
+        view
+        returns (uint256 amount)
+    {
+        if (_claimData[0].userVoteBias != 0) {
             amount += _activeClaimable(_bountyId, _gaugeBias, _claimData);
         }
     }
@@ -758,7 +756,8 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
             if (_addressesBlacklisted[i] != _blacklistData[i].user) revert WRONG_INPUT();
             // Get the user slope.
             if (_period > _blacklistData[i].lastVote) {
-                _bias = _getAddrBias(_blacklistData[i].userVoteSlope, _blacklistData[i].userVoteEnd, _period);
+                //_bias = _getAddrBias(_blacklistData[i].userVoteSlope, _blacklistData[i].userVoteEnd, _period);
+                _bias = _blacklistData[i].userVoteBias;
                 gaugeBias -= _bias;
             }
             // Increment i.
@@ -978,21 +977,21 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
     /// @param userSlope User slope.
     /// @param endLockTime Lock end date of the address.
     /// @param currentEpoch Current period.
-    function _getAddrBias(uint256 userSlope, uint256 endLockTime, uint256 currentEpoch)
-        internal
-        pure
-        returns (uint256)
-    {
-        if (currentEpoch >= endLockTime) return 0;
-        return userSlope * (endLockTime - currentEpoch);
-    }
+    // function _getAddrBias(uint256 userSlope, uint256 endLockTime, uint256 currentEpoch)
+    //     internal
+    //     pure
+    //     returns (uint256)
+    // {
+    //     if (currentEpoch >= endLockTime) return 0;
+    //     return userSlope * (endLockTime - currentEpoch);
+    // }
 
     /// @notice Get the claimable amount for a user and a bounty.
-    function _activeClaimable(
-        uint256 _bountyId,
-        uint256 _gaugeBias,
-        ClaimData[] calldata _claimData
-    ) internal view returns (uint256 amount) {
+    function _activeClaimable(uint256 _bountyId, uint256 _gaugeBias, ClaimData[] calldata _claimData)
+        internal
+        view
+        returns (uint256 amount)
+    {
         if (isBlacklisted[_bountyId][_claimData[0].user]) return 0;
 
         Bounty memory bounty = bounties[_bountyId];
@@ -1005,9 +1004,9 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
         uint256 endTimestamp = FixedPointMathLib.max(bounty.endTimestamp, upgradedBounty.endTimestamp);
 
         if (
-            _claimData[0].userVoteSlope == 0 || lastUserClaim[_claimData[0].user][_bountyId] >= currentEpoch
-                || currentEpoch >= _claimData[0].userVoteEnd || currentEpoch <= _claimData[0].lastVote
-                || currentEpoch >= endTimestamp || currentEpoch < getActivePeriod(_bountyId).timestamp
+            _claimData[0].userVoteBias == 0 || lastUserClaim[_claimData[0].user][_bountyId] >= currentEpoch
+                || currentEpoch <= _claimData[0].lastVote || currentEpoch >= endTimestamp
+                || currentEpoch < getActivePeriod(_bountyId).timestamp
                 || amountClaimed[_bountyId] >= bounty.totalRewardAmount
         ) return 0;
 
@@ -1041,7 +1040,8 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
             _rewardPerVote = _rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeAdjBias);
         }
         // Get user voting power.
-        uint256 _bias = _getAddrBias(_claimData[0].userVoteSlope, _claimData[0].userVoteEnd, currentEpoch);
+        //uint256 _bias = _getAddrBias(_claimData[0].userVoteSlope, _claimData[0].userVoteEnd, currentEpoch);
+        uint256 _bias = _claimData[0].userVoteBias;
 
         // Estimation of the amount of rewards.
         amount = _bias.mulWad(_rewardPerVote);

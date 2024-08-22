@@ -5,8 +5,7 @@ interface IPlatform {
     struct ClaimData {
         address user;
         uint256 lastVote;
-        uint256 userVoteSlope;
-        uint256 userVoteEnd;
+        uint256 userVoteBias;
     }
 
     function claim(

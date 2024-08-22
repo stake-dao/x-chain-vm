@@ -120,6 +120,8 @@ contract PancakePlatformTest is BasePlatformTest {
         claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
         uint256 balanceAfterFirstClaim = rewardToken.balanceOf(_user);
 
+        emit log_uint(balanceAfterFirstClaim - snapshotBalance);
+
         assertGt(pancakePlatform.rewardPerVote(_id), 0);
 
         assertGt(balanceAfterFirstClaim, snapshotBalance);
@@ -203,9 +205,7 @@ contract PancakePlatformTest is BasePlatformTest {
 
         uint256 _value = bnbSender.claimMinValue();
         vm.expectRevert(BnbGaugeVotingStateSender.NotAnUser.selector);
-        bnbSender.claimOnDstChain{value: _value}(
-            _id, _user_proxy, _gauge, chainId, chainId, blacklist
-        );
+        bnbSender.claimOnDstChain{value: _value}(_id, _user_proxy, _gauge, chainId, chainId, blacklist);
     }
 
     function testClaimBribeWithWhitelistedRecipientSet() public override {}

@@ -17,6 +17,6 @@ interface IVotingEscrow {
             uint16 cakePoolType,
             uint16 withdrawFlag
         );
-    
+
     function isCakePoolProxy(address proxy) external view returns (bool);
 }

@@ -35,7 +35,7 @@ contract BnbGaugeVotingStateSender {
     error GovernanceOnly();
     error InsufficientValue();
     error NotAnUser();
-    error UserWithoutSlope();
+    error UserWithoutBias();
 
     event GovernanceChanged(address indexed newGovernance);
     event RecipientSet(address indexed sender, address indexed recipient, string indexed chain);
@@ -113,25 +113,28 @@ contract BnbGaugeVotingStateSender {
 
         IGaugeVoting.VotedSlope memory userSlope = GAUGE_VOTING.voteUserSlopes(_user, _gaugeHash);
 
+        uint256 currentEpoch = getCurrentEpoch();
+
         // check if the locker is not expired
-        if (userSlope.end > getCurrentPeriod()) {
-            claimData.userVoteSlope += userSlope.slope;
+        if (userSlope.end > currentEpoch) {
+            // calculate bias
+            claimData.userVoteBias += userSlope.slope * (userSlope.end - currentEpoch);
             claimData.lastVote = GAUGE_VOTING.lastUserVote(_user, _gaugeHash);
-            claimData.userVoteEnd = userSlope.end;
         }
 
         // check if the user own a proxy
-        (,, address proxy,, uint256 proxyEndTime,,,) = VE_CAKE.getUserInfo(_user);
+        (,, address proxy,,,,,) = VE_CAKE.getUserInfo(_user);
 
         // check if the proxy is not expired
-        if (proxy != address(0) && proxyEndTime > getCurrentPeriod()) {
+        if (proxy != address(0)) {
             userSlope = GAUGE_VOTING.voteUserSlopes(proxy, _gaugeHash);
-            claimData.userVoteSlope += userSlope.slope;
+            // check if the proxy is not expired
+            if (userSlope.end > currentEpoch) {
+                // calculate bias
+                claimData.userVoteBias += userSlope.slope * (userSlope.end - currentEpoch);
+            }
             if (claimData.lastVote == 0) {
                 claimData.lastVote = GAUGE_VOTING.lastUserVote(proxy, _gaugeHash);
-            }
-            if (claimData.userVoteEnd == 0 || claimData.userVoteEnd > userSlope.end) {
-                claimData.userVoteEnd = userSlope.end;
             }
         }
     }
@@ -139,10 +142,11 @@ contract BnbGaugeVotingStateSender {
     /// @notice Get gauge bias for the current period
     /// @param _gaugeHash Gauge hash
     function _getGaugeBias(bytes32 _gaugeHash) internal view returns (uint256 gaugeBias) {
-        gaugeBias = GAUGE_VOTING.gaugePointsWeight(_gaugeHash, getCurrentPeriod()).bias;
+        gaugeBias = GAUGE_VOTING.gaugePointsWeight(_gaugeHash, getCurrentEpoch()).bias;
     }
 
     /// @notice Get the claim data array with blacklist
+    /// @dev mainly used on UI
     /// @param _user Address of the use
     /// @param _gaugeHash Gauge hash
     /// @param _blacklist Blacklist addresses
@@ -157,7 +161,7 @@ contract BnbGaugeVotingStateSender {
         // get user claim data (locker and/or proxy)
         claimData[0] = _getClaimData(_user, _gaugeHash);
 
-        if (claimData[0].userVoteSlope == 0) revert UserWithoutSlope();
+        if (claimData[0].userVoteBias == 0) revert UserWithoutBias();
 
         // fill blacklist counting the user's proxy too
         if (_blacklist.length > 0) {
@@ -238,7 +242,7 @@ contract BnbGaugeVotingStateSender {
 
     /// @notice Return the current voting period
     /// @dev According with realPeriod of Gauge Voting contract, which should be even weeks Thursday
-    function getCurrentPeriod() public view returns (uint256) {
+    function getCurrentEpoch() public view returns (uint256) {
         return (block.timestamp / 2 weeks) * 2 weeks;
     }
 }
