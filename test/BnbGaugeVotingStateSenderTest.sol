@@ -128,11 +128,34 @@ contract BnbGaugeVotingStateSenderTest is Utils {
 
         (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
 
-        (uint256 gaugeBias, IPlatform.ClaimData[] memory claimData) = this._encodePayload(payload);
+        (, IPlatform.ClaimData[] memory claimData) = this._encodePayload(payload);
 
         // user+proxy
         // blacklist user 1
         assertEq(claimData.length, 2);
+    }
+
+    function testSendClaimStateWithProxyInBlacklist() external {
+        address[] memory blacklist = new address[](1);
+        blacklist[0] = USER_2_PROXY;
+
+        vm.recordLogs();
+
+        sender.claimOnDstChain{value: sender.claimMinValue()}(
+            0, USER_2, GAUGE_2, GAUGE_CHAIN_ID, DST_CHAIN_ID, blacklist
+        );
+
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        (,, bytes memory payload) = abi.decode(entries[1].data, (string, string, bytes));
+
+        (, IPlatform.ClaimData[] memory claimData) = this._encodePayload(payload);
+
+        // user+proxy
+        // blacklist user 1
+        assertEq(claimData.length, 2);
+        assertEq(claimData[1].userVoteBias, 0);
+        assertEq(claimData[1].lastVote, 0);
     }
 
     function _encodePayload(bytes calldata _payload)

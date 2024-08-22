@@ -548,7 +548,6 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
 
         // Voting Power = userSlope * dt
         // with dt = lock_end - period.
-        //uint256 _bias = _getAddrBias(_claimData.userVoteSlope, _claimData.userVoteEnd, currentEpoch); // we are in the epoch after the voting period (active period)
         uint256 _bias = _claimData.userVoteBias;
         // Compute the reward amount based on
         // Reward / Total Votes.
@@ -756,7 +755,6 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
             if (_addressesBlacklisted[i] != _blacklistData[i].user) revert WRONG_INPUT();
             // Get the user slope.
             if (_period > _blacklistData[i].lastVote) {
-                //_bias = _getAddrBias(_blacklistData[i].userVoteSlope, _blacklistData[i].userVoteEnd, _period);
                 _bias = _blacklistData[i].userVoteBias;
                 gaugeBias -= _bias;
             }
@@ -973,19 +971,6 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
         return (block.timestamp / _TWOWEEKS) * _TWOWEEKS;
     }
 
-    /// @notice Return the bias of a given address based on its lock end date and the current period.
-    /// @param userSlope User slope.
-    /// @param endLockTime Lock end date of the address.
-    /// @param currentEpoch Current period.
-    // function _getAddrBias(uint256 userSlope, uint256 endLockTime, uint256 currentEpoch)
-    //     internal
-    //     pure
-    //     returns (uint256)
-    // {
-    //     if (currentEpoch >= endLockTime) return 0;
-    //     return userSlope * (endLockTime - currentEpoch);
-    // }
-
     /// @notice Get the claimable amount for a user and a bounty.
     function _activeClaimable(uint256 _bountyId, uint256 _gaugeBias, ClaimData[] calldata _claimData)
         internal
@@ -1040,7 +1025,6 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
             _rewardPerVote = _rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeAdjBias);
         }
         // Get user voting power.
-        //uint256 _bias = _getAddrBias(_claimData[0].userVoteSlope, _claimData[0].userVoteEnd, currentEpoch);
         uint256 _bias = _claimData[0].userVoteBias;
 
         // Estimation of the amount of rewards.

@@ -75,7 +75,6 @@ contract BnbGaugeVotingStateSender {
         // check if the user is not a proxy
         if (VE_CAKE.isCakePoolProxy(_user)) revert NotAnUser();
 
-        // calculate total slope
         IPlatform.ClaimData[] memory claimData = new IPlatform.ClaimData[](1 + _blacklist.length);
 
         bytes32 gaugeHash = keccak256(abi.encodePacked(_gauge, _gaugeChainId));
@@ -110,6 +109,12 @@ contract BnbGaugeVotingStateSender {
         returns (IPlatform.ClaimData memory claimData)
     {
         claimData.user = _user;
+
+        // if a proxy has included into the blacklist, set bias and last vote to zero
+        // to not be counted in the gauge adjusted bias calculation
+        if (VE_CAKE.isCakePoolProxy(_user)) {
+            return claimData;
+        }
 
         IGaugeVoting.VotedSlope memory userSlope = GAUGE_VOTING.voteUserSlopes(_user, _gaugeHash);
 
