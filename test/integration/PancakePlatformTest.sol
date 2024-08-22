@@ -93,50 +93,6 @@ contract PancakePlatformTest is BasePlatformTest {
         assertFalse(pancakePlatform.whitelisted(_user));
     }
 
-    // function testClaimableWithProxy() public {
-    //     // Create Default Bounty.
-    //     // 16 July (Tuesday)
-    //     uint256 _id = _createDefaultBounty(3);
-    //     _checkpointGauge(_gauge);
-
-    //     skip(6 days);
-
-    //     // 22 July
-
-    //     // simulate state sender to create claim data for user
-    //     address[] memory blacklist;
-
-    //     bytes memory payload = _createClaimPayload(_id, _user, _gauge, chainId, blacklist);
-
-    //     (uint256 gaugeBias, IPlatform.ClaimData[] memory claimData) = this._encodePayload(payload);
-    //     assertEq(claimData.length, 2);
-
-    //     // check claimable amount
-    //     IPlatform.ClaimData[] memory blacklistClaimData;
-    //     uint256 claimable = pancakePlatform.claimable(_id, gaugeBias, claimData[0], claimData[1], blacklistClaimData);
-    //     assertGt(claimable, 0);
-
-    //     // trigger the execute on the claimer
-    //     uint256 snapshotBalance = rewardToken.balanceOf(_user);
-    //     claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
-    //     uint256 balanceAfterFirstClaim = rewardToken.balanceOf(_user);
-
-    //     assertGt(pancakePlatform.rewardPerVote(_id), 0);
-
-    //     assertGt(balanceAfterFirstClaim, snapshotBalance);
-    //     assertApproxEqAbs(claimable, balanceAfterFirstClaim - snapshotBalance, 1);
-    //     emit log_uint(claimable);
-
-    //     claimable = pancakePlatform.claimable(_id, gaugeBias, claimData[0], claimData[1], blacklistClaimData);
-    //     assertEq(claimable, 0);
-
-    //     claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
-    //     uint256 balanceAfterSecondClaim = rewardToken.balanceOf(_user);
-
-    //     assertGt(pancakePlatform.rewardPerVote(_id), 0);
-    //     assertEq(balanceAfterFirstClaim, balanceAfterSecondClaim);
-    // }
-
     function testClaimableWithProxy() public {
         // Create Default Bounty.
         // 16 July (Tuesday)
@@ -152,91 +108,90 @@ contract PancakePlatformTest is BasePlatformTest {
 
         bytes memory payload = _claimOnDstChain(_id, _user, _gauge, chainId, blacklist);
 
-        // (uint256 gaugeBias, IPlatform.ClaimData[] memory claimData) = this._encodePayload(payload);
-        // assertEq(claimData.length, 2);
+        (uint256 gaugeBias, IPlatform.ClaimData[] memory claimData) = this._encodePayload(payload);
+        assertEq(claimData.length, 1);
 
-        // // check claimable amount
-        // IPlatform.ClaimData[] memory blacklistClaimData;
-        // uint256 claimable = pancakePlatform.claimable(_id, gaugeBias, claimData[0], claimData[1], blacklistClaimData);
-        // assertGt(claimable, 0);
+        // check claimable amount
+        uint256 claimable = pancakePlatform.claimable(_id, gaugeBias, claimData);
+        assertGt(claimable, 0);
 
-        // // trigger the execute on the claimer
+        // trigger the execute on the claimer
         uint256 snapshotBalance = rewardToken.balanceOf(_user);
         claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
         uint256 balanceAfterFirstClaim = rewardToken.balanceOf(_user);
 
-        // assertGt(pancakePlatform.rewardPerVote(_id), 0);
+        assertGt(pancakePlatform.rewardPerVote(_id), 0);
 
-        // assertGt(balanceAfterFirstClaim, snapshotBalance);
-        // assertApproxEqAbs(claimable, balanceAfterFirstClaim - snapshotBalance, 1);
+        assertGt(balanceAfterFirstClaim, snapshotBalance);
+        assertApproxEqAbs(claimable, balanceAfterFirstClaim - snapshotBalance, 1);
 
-        // claimable = pancakePlatform.claimable(_id, gaugeBias, claimData[0], claimData[1], blacklistClaimData);
-        // assertEq(claimable, 0);
+        claimable = pancakePlatform.claimable(_id, gaugeBias, claimData);
+        assertEq(claimable, 0);
 
-        // claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
-        // uint256 balanceAfterSecondClaim = rewardToken.balanceOf(_user);
+        claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
+        uint256 balanceAfterSecondClaim = rewardToken.balanceOf(_user);
 
-        // assertGt(pancakePlatform.rewardPerVote(_id), 0);
-        // assertEq(balanceAfterFirstClaim, balanceAfterSecondClaim);
+        assertGt(pancakePlatform.rewardPerVote(_id), 0);
+        assertEq(balanceAfterFirstClaim, balanceAfterSecondClaim);
     }
 
     function testClaimable() public override {}
 
     function testClaimBribeWithWhitelistedRecipientNotSet() public override {
-        // // Create Default Bounty.
-        // uint256 _id = _createDefaultBounty(3);
-        // _checkpointGauge(_gauge);
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(3);
+        _checkpointGauge(_gauge);
 
-        // vm.prank(_deployer);
-        // pancakePlatform.whitelistAddress(_user, true);
+        vm.prank(_deployer);
+        pancakePlatform.whitelistAddress(_user, true);
 
-        // skip(8 days);
+        skip(8 days);
 
-        // address[] memory blacklist;
+        address[] memory blacklist;
 
-        // bytes memory payload = _createClaimPayload(_id, _user, _gauge, chainId, blacklist);
+        bytes memory payload = _claimOnDstChain(_id, _user, _gauge, chainId, blacklist);
 
-        // vm.expectRevert(AxelarExecutableClaimer.CALL_FAILED.selector);
-        // claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
+        vm.expectRevert(AxelarExecutableClaimer.CALL_FAILED.selector);
+        claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
 
-        // address recipient = address(0xABCD);
-        // claimer.execute(
-        //     "",
-        //     "binance",
-        //     address(bnbSender).toHexStringChecksumed(),
-        //     abi.encodeWithSelector(Platform.setRecipient.selector, _user, recipient)
-        // );
+        address recipient = address(0xABCD);
+        claimer.execute(
+            "",
+            "binance",
+            address(bnbSender).toHexStringChecksumed(),
+            abi.encodeWithSelector(Platform.setRecipient.selector, _user, recipient)
+        );
 
-        // claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
+        claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
     }
 
     function testClaimBribeWithRecipientSet() public override {
-        // // Create Default Bounty.
-        // uint256 _id = _createDefaultBounty(3);
-        // _checkpointGauge(_gauge);
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(3);
+        _checkpointGauge(_gauge);
 
-        // vm.prank(_deployer);
-        // pancakePlatform.whitelistAddress(_user, true);
+        vm.prank(_deployer);
+        pancakePlatform.whitelistAddress(_user, true);
 
-        // skip(8 days);
+        skip(8 days);
 
-        // address[] memory blacklist;
+        address[] memory blacklist;
 
-        // bytes memory payload = _createClaimPayload(_id, _user, _gauge, chainId, blacklist);
+        bytes memory payload = _claimOnDstChain(_id, _user, _gauge, chainId, blacklist);
 
-        // address recipient = address(0xABCD);
-        // claimer.execute(
-        //     "",
-        //     "binance",
-        //     address(bnbSender).toHexStringChecksumed(),
-        //     abi.encodeWithSelector(Platform.setRecipient.selector, _user, recipient)
-        // );
+        address recipient = address(0xABCD);
+        claimer.execute(
+            "",
+            "binance",
+            address(bnbSender).toHexStringChecksumed(),
+            abi.encodeWithSelector(Platform.setRecipient.selector, _user, recipient)
+        );
 
-        // uint256 recipientSnapshot = rewardToken.balanceOf(recipient);
-        // claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
-        // uint256 recipientBalanceAfterClaim = rewardToken.balanceOf(recipient);
+        uint256 recipientSnapshot = rewardToken.balanceOf(recipient);
+        claimer.execute("", "binance", address(bnbSender).toHexStringChecksumed(), payload);
+        uint256 recipientBalanceAfterClaim = rewardToken.balanceOf(recipient);
 
-        // assertGt(recipientBalanceAfterClaim, recipientSnapshot);
+        assertGt(recipientBalanceAfterClaim, recipientSnapshot);
     }
 
     function testClaimBribeWithWhitelistedRecipientSet() public override {}
@@ -312,7 +267,7 @@ contract PancakePlatformTest is BasePlatformTest {
         pure
         returns (uint256 gaugeBias, IPlatform.ClaimData[] memory claimData)
     {
-        (,,,, gaugeBias, claimData,) =
-            abi.decode(_payload[4:], (uint256, address, address, uint256, uint256, IPlatform.ClaimData[], bool));
+        (,,, gaugeBias, claimData) =
+            abi.decode(_payload[4:], (uint256, address, uint256, uint256, IPlatform.ClaimData[]));
     }
 }

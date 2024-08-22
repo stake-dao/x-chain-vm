@@ -715,26 +715,19 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
     ///////////////////////////////////////////////////////////////
 
     /// @notice Get an estimate of the reward amount for a given user.
-    /// @param bountyId ID of the bounty.
+    /// @param _bountyId ID of the bounty.
+    /// @param _gaugeBias Gauge bias.
+    /// @param _claimData Claim data (blacklist included)
     /// @dev Returns only claimable for current week. For previous weeks rewards, if it was checkpointed, use `checkpointedBalances`
     /// @return amount of rewards.
     /// Mainly used for UI.
-    function claimable(
-        uint256 bountyId,
-        uint256 _gaugeBias,
-        ClaimData memory userClaimData,
-        ClaimData memory proxyClaimData,
-        ClaimData[] memory blacklistClaimData
-    ) external view returns (uint256 amount) {
-        address user = userClaimData.user;
-        address proxy = proxyClaimData.user;
-
-        if (user != address(0)) {
-            amount += _activeClaimable(bountyId, _gaugeBias, userClaimData, blacklistClaimData);
-        }
-
-        if (proxy != address(0)) {
-            amount += _activeClaimable(bountyId, _gaugeBias, proxyClaimData, blacklistClaimData);
+    function claimable(uint256 _bountyId, uint256 _gaugeBias, ClaimData[] calldata _claimData)
+        external
+        view
+        returns (uint256 amount)
+    {
+        if (_claimData[0].userVoteSlope != 0) {
+            amount += _activeClaimable(_bountyId, _gaugeBias, _claimData);
         }
     }
 
@@ -995,13 +988,12 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
     }
 
     /// @notice Get the claimable amount for a user and a bounty.
-    function _activeClaimable(
-        uint256 _bountyId,
-        uint256 _gaugeBias,
-        ClaimData memory _claimData,
-        ClaimData[] memory _blacklistClaimData
-    ) internal view returns (uint256 amount) {
-        if (isBlacklisted[_bountyId][_claimData.user]) return 0;
+    function _activeClaimable(uint256 _bountyId, uint256 _gaugeBias, ClaimData[] calldata _claimData)
+        internal
+        view
+        returns (uint256 amount)
+    {
+        if (isBlacklisted[_bountyId][_claimData[0].user]) return 0;
 
         Bounty memory bounty = bounties[_bountyId];
         // If there is an upgrade in progress but period hasn't been rolled over yet.
@@ -1013,8 +1005,8 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
         uint256 endTimestamp = FixedPointMathLib.max(bounty.endTimestamp, upgradedBounty.endTimestamp);
 
         if (
-            _claimData.userVoteSlope == 0 || lastUserClaim[_claimData.user][_bountyId] >= currentEpoch
-                || currentEpoch >= _claimData.userVoteEnd || currentEpoch <= _claimData.lastVote
+            _claimData[0].userVoteSlope == 0 || lastUserClaim[_claimData[0].user][_bountyId] >= currentEpoch
+                || currentEpoch >= _claimData[0].userVoteEnd || currentEpoch <= _claimData[0].lastVote
                 || currentEpoch >= endTimestamp || currentEpoch < getActivePeriod(_bountyId).timestamp
                 || amountClaimed[_bountyId] >= bounty.totalRewardAmount
         ) return 0;
@@ -1043,13 +1035,13 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
             // Get adjusted slope without blacklisted addresses.
             uint256 gaugeBias = gaugesAdjustedBias[_bountyId][currentEpoch];
             if (gaugeBias == 0) {
-                gaugeBias = _getAdjustedBias(bounty.blacklist, currentEpoch, _gaugeBias, _blacklistClaimData);
+                gaugeBias = _getAdjustedBias(bounty.blacklist, currentEpoch, _gaugeBias, _claimData[1:]);
             }
 
             _rewardPerVote = _rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
         }
         // Get user voting power.
-        uint256 _bias = _getAddrBias(_claimData.userVoteSlope, _claimData.userVoteEnd, currentEpoch);
+        uint256 _bias = _getAddrBias(_claimData[0].userVoteSlope, _claimData[0].userVoteEnd, currentEpoch);
 
         // Estimation of the amount of rewards.
         amount = _bias.mulWad(_rewardPerVote);

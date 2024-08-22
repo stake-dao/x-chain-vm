@@ -76,20 +76,7 @@ contract BnbGaugeVotingStateSender {
 
         bytes32 gaugeHash = keccak256(abi.encodePacked(_gauge, _gaugeChainId));
 
-        // get user claim data (locker and/or proxy)
-        claimData[0] = _getClaimData(_user, gaugeHash);
-
-        if (claimData[0].userVoteSlope == 0) revert UserWithoutSlope();
-
-        // fill blacklist counting the user's proxy too
-        if (_blacklist.length > 0) {
-            for (uint256 i; i < _blacklist.length;) {
-                claimData[i + 1] = _getClaimData(_blacklist[i], gaugeHash);
-                unchecked {
-                    ++i;
-                }
-            }
-        }
+        claimData = getWholeClaimData(_user, gaugeHash, _blacklist);
 
         // calculate payload to bridge
         bytes memory payload = abi.encodeWithSelector(
@@ -113,7 +100,11 @@ contract BnbGaugeVotingStateSender {
     /// @notice Get claim data
     /// @param _user Address of the voter.
     /// @param _gaugeHash Gauge hash.
-    function _getClaimData(address _user, bytes32 _gaugeHash) internal returns (IPlatform.ClaimData memory claimData) {
+    function _getClaimData(address _user, bytes32 _gaugeHash)
+        internal
+        view
+        returns (IPlatform.ClaimData memory claimData)
+    {
         claimData.user = _user;
 
         IGaugeVoting.VotedSlope memory userSlope = GAUGE_VOTING.voteUserSlopes(_user, _gaugeHash);
@@ -143,8 +134,38 @@ contract BnbGaugeVotingStateSender {
 
     /// @notice Get gauge bias for the current period
     /// @param _gaugeHash Gauge hash
-    function _getGaugeBias(bytes32 _gaugeHash) internal returns (uint256 gaugeBias) {
+    function _getGaugeBias(bytes32 _gaugeHash) internal view returns (uint256 gaugeBias) {
         gaugeBias = GAUGE_VOTING.gaugePointsWeight(_gaugeHash, getCurrentPeriod()).bias;
+    }
+
+    /// @notice Get the claim data array with blacklist
+    /// @param _user Address of the use
+    /// @param _gaugeHash Gauge hash
+    /// @param _blacklist Blacklist addresses
+    function getWholeClaimData(address _user, bytes32 _gaugeHash, address[] calldata _blacklist)
+        public
+        view
+        returns (IPlatform.ClaimData[] memory)
+    {
+        // calculate total slope
+        IPlatform.ClaimData[] memory claimData = new IPlatform.ClaimData[](1 + _blacklist.length);
+
+        // get user claim data (locker and/or proxy)
+        claimData[0] = _getClaimData(_user, _gaugeHash);
+
+        if (claimData[0].userVoteSlope == 0) revert UserWithoutSlope();
+
+        // fill blacklist counting the user's proxy too
+        if (_blacklist.length > 0) {
+            for (uint256 i; i < _blacklist.length;) {
+                claimData[i + 1] = _getClaimData(_blacklist[i], _gaugeHash);
+                unchecked {
+                    ++i;
+                }
+            }
+        }
+
+        return claimData;
     }
 
     /// @notice Sets the recipient for an address on oracle.
