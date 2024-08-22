@@ -721,11 +721,11 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
     /// @dev Returns only claimable for current week. For previous weeks rewards, if it was checkpointed, use `checkpointedBalances`
     /// @return amount of rewards.
     /// Mainly used for UI.
-    function claimable(uint256 _bountyId, uint256 _gaugeBias, ClaimData[] calldata _claimData)
-        external
-        view
-        returns (uint256 amount)
-    {
+    function claimable(
+        uint256 _bountyId,
+        uint256 _gaugeBias,
+        ClaimData[] calldata _claimData
+    ) external view returns (uint256 amount) {
         if (_claimData[0].userVoteSlope != 0) {
             amount += _activeClaimable(_bountyId, _gaugeBias, _claimData);
         }
@@ -988,11 +988,11 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
     }
 
     /// @notice Get the claimable amount for a user and a bounty.
-    function _activeClaimable(uint256 _bountyId, uint256 _gaugeBias, ClaimData[] calldata _claimData)
-        internal
-        view
-        returns (uint256 amount)
-    {
+    function _activeClaimable(
+        uint256 _bountyId,
+        uint256 _gaugeBias,
+        ClaimData[] calldata _claimData
+    ) internal view returns (uint256 amount) {
         if (isBlacklisted[_bountyId][_claimData[0].user]) return 0;
 
         Bounty memory bounty = bounties[_bountyId];

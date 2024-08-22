@@ -232,9 +232,9 @@ contract BnbGaugeVotingStateSender {
         emit GovernanceChanged(msg.sender);
     }
 
-    /// @notice Calculates the current period based on weekly intervals
-    /// @return uint256 The start of the current weekly period
+    /// @notice Return the current voting period
+    /// @dev According with realPeriod of Gauge Voting contract, which should be even weeks Thursday
     function getCurrentPeriod() public view returns (uint256) {
-        return (block.timestamp / 1 weeks) * 1 weeks;
+        return (block.timestamp / 2 weeks) * 2 weeks;
     }
 }
