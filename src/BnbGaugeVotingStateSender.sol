@@ -34,6 +34,7 @@ contract BnbGaugeVotingStateSender {
 
     error GovernanceOnly();
     error InsufficientValue();
+    error NotAnUser();
     error UserWithoutSlope();
 
     event GovernanceChanged(address indexed newGovernance);
@@ -70,6 +71,9 @@ contract BnbGaugeVotingStateSender {
     ) external payable {
         // check if msg.value is enough
         if (msg.value < claimMinValue) revert InsufficientValue();
+
+        // check if the user is not a proxy
+        if (VE_CAKE.isCakePoolProxy(_user)) revert NotAnUser();
 
         // calculate total slope
         IPlatform.ClaimData[] memory claimData = new IPlatform.ClaimData[](1 + _blacklist.length);

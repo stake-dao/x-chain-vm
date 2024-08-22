@@ -194,6 +194,20 @@ contract PancakePlatformTest is BasePlatformTest {
         assertGt(recipientBalanceAfterClaim, recipientSnapshot);
     }
 
+    function testClaimWithUserAsProxy() public {
+        // Create Default Bounty.
+        uint256 _id = _createDefaultBounty(3);
+        _checkpointGauge(_gauge);
+
+        address[] memory blacklist;
+
+        uint256 _value = bnbSender.claimMinValue();
+        vm.expectRevert(BnbGaugeVotingStateSender.NotAnUser.selector);
+        bnbSender.claimOnDstChain{value: _value}(
+            _id, _user_proxy, _gauge, chainId, chainId, blacklist
+        );
+    }
+
     function testClaimBribeWithWhitelistedRecipientSet() public override {}
 
     function testClaimBribe() public override {}

@@ -676,13 +676,13 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
         }
 
         // Get adjusted slope without blacklisted addresses.
-        uint256 gaugeBias = gaugesAdjustedBias[_bountyId][_currentEpoch];
-        if (gaugeBias == 0) {
-            gaugeBias = _getAdjustedBias(bounty.blacklist, _currentEpoch, _gaugeBias, _blacklistData);
-            gaugesAdjustedBias[_bountyId][_currentEpoch] = gaugeBias;
+        uint256 gaugeAdjBias = gaugesAdjustedBias[_bountyId][_currentEpoch];
+        if (gaugeAdjBias == 0) {
+            gaugeAdjBias = _getAdjustedBias(bounty.blacklist, _currentEpoch, _gaugeBias, _blacklistData);
+            gaugesAdjustedBias[_bountyId][_currentEpoch] = gaugeAdjBias;
         }
 
-        rewardPerVote[_bountyId] = rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
+        rewardPerVote[_bountyId] = rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeAdjBias);
         activePeriod[_bountyId] = Period(index, _currentEpoch, rewardPerPeriod);
 
         emit PeriodRolledOver(_bountyId, index, _currentEpoch, rewardPerPeriod);
@@ -699,14 +699,14 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
         Bounty storage bounty = bounties[_bountyId];
 
         // Get adjusted slope without blacklisted addresses.
-        uint256 gaugeBias = gaugesAdjustedBias[_bountyId][_currentEpoch];
-        if (gaugeBias == 0) {
-            gaugeBias = _getAdjustedBias(bounty.blacklist, _currentEpoch, _gaugeBias, _blacklistData);
-            gaugesAdjustedBias[_bountyId][_currentEpoch] = gaugeBias;
+        uint256 gaugeAdjBias = gaugesAdjustedBias[_bountyId][_currentEpoch];
+        if (gaugeAdjBias == 0) {
+            gaugeAdjBias = _getAdjustedBias(bounty.blacklist, _currentEpoch, _gaugeBias, _blacklistData);
+            gaugesAdjustedBias[_bountyId][_currentEpoch] = gaugeAdjBias;
         }
 
-        if (gaugeBias != 0) {
-            rewardPerVote[_bountyId] = activePeriod[_bountyId].rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
+        if (gaugeAdjBias != 0) {
+            rewardPerVote[_bountyId] = activePeriod[_bountyId].rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeAdjBias);
         }
     }
 
@@ -1033,12 +1033,12 @@ contract Platform is Owned, ReentrancyGuard, IPlatform {
             }
 
             // Get adjusted slope without blacklisted addresses.
-            uint256 gaugeBias = gaugesAdjustedBias[_bountyId][currentEpoch];
-            if (gaugeBias == 0) {
-                gaugeBias = _getAdjustedBias(bounty.blacklist, currentEpoch, _gaugeBias, _claimData[1:]);
+            uint256 gaugeAdjBias = gaugesAdjustedBias[_bountyId][currentEpoch];
+            if (gaugeAdjBias == 0) {
+                gaugeAdjBias = _getAdjustedBias(bounty.blacklist, currentEpoch, _gaugeBias, _claimData[1:]);
             }
 
-            _rewardPerVote = _rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeBias);
+            _rewardPerVote = _rewardPerPeriod.mulDiv(_BASE_UNIT, gaugeAdjBias);
         }
         // Get user voting power.
         uint256 _bias = _getAddrBias(_claimData[0].userVoteSlope, _claimData[0].userVoteEnd, currentEpoch);
