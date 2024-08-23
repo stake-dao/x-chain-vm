@@ -45,7 +45,7 @@ contract BalancerPlatformTest is BasePlatformTest {
         oracles[0] = address(new BalancerOracle(address(axelarExecutable), address(_gaugeController)));
         oracles[1] = address(new BalancerOracle(address(axelarExecutable), address(_gaugeController)));
 
-        axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), oracles);
+        axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), oracles, "Ethereum");
 
         BalancerOracle(oracles[0]).setAxelarExecutable(address(axelarExecutable));
         BalancerOracle(oracles[1]).setAxelarExecutable(address(axelarExecutable));

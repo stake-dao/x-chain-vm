@@ -45,7 +45,7 @@ contract FXNPlatformTest is BasePlatformTest {
         oracles[0] = address(new FXNOracle(address(axelarExecutable), address(_gaugeController)));
         oracles[1] = address(new FXNOracle(address(axelarExecutable), address(_gaugeController)));
 
-        axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), oracles);
+        axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), oracles, "Ethereum");
 
         FXNOracle(oracles[0]).setAxelarExecutable(address(axelarExecutable));
         FXNOracle(oracles[1]).setAxelarExecutable(address(axelarExecutable));

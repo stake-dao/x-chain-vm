@@ -45,7 +45,7 @@ contract FraxPlatformTest is BasePlatformTest {
         oracles[0] = address(new FraxOracle(address(axelarExecutable), address(_gaugeController)));
         oracles[1] = address(new FraxOracle(address(axelarExecutable), address(_gaugeController)));
 
-        axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), oracles);
+        axelarExecutable = new AxelarExecutable(address(_gateway), address(sender), oracles, "Ethereum");
 
         FraxOracle(oracles[0]).setAxelarExecutable(address(axelarExecutable));
         FraxOracle(oracles[1]).setAxelarExecutable(address(axelarExecutable));
